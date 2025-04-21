@@ -20,6 +20,7 @@ export default StyleSheet.create({
 	},
 	main: {
 		flex: 1,
+		width: '100%',
 		justifyContent: 'center',
 		alignItems: 'center',
 	},
@@ -47,6 +48,7 @@ export default StyleSheet.create({
 		color: '#fff',
 		backgroundColor: '#222',
 		marginVertical: 10,
+		dropdownIconColor: "#fff"
 	},
 	placeholder: {
 		fontSize: 20,
@@ -60,6 +62,11 @@ export default StyleSheet.create({
 	},
 	stat: {
 		color: '#fff',      // for consistency, but unused now
+	},
+	logContainer: {
+		width: '90%',
+		maxHeight: 200,      // <-- cap the log height
+		marginVertical: 10,
 	},
 	logText: {
 		color: '#fff',      // make battle log white
@@ -89,4 +96,38 @@ export default StyleSheet.create({
 		color: '#fff',
 		fontSize: 16,
 	},
+	openContainer: {
+		alignItems: 'center',
+	},
+	count: {
+		color: '#fff',
+		fontSize: 18,
+		marginBottom: 8,
+	},
+	reveal: {
+		color: '#FFD700',
+		fontSize: 24,
+		marginVertical: 12,
+	},
+	// moved into normal flow, so no overlap:
+	storeButtonContainer: {
+		width: '100%',        // full width
+		alignItems: 'center', // center the button
+		marginVertical: 8,    // space above/below
+	},
+
+	// debug stays at bottom-left, but pushed up so it doesn't collide
+	debugButtonContainer: {
+		position: 'absolute',
+		bottom: 200,
+		left: 16,
+	}, buttonRow: {
+		flexDirection: 'row',
+		marginVertical: 16,      // spacing above/below
+	},
+	buttonWrapper: {
+		flex: 1,                 // take equal share of the row
+		marginHorizontal: 4,     // small gap between them
+	},
+
 });

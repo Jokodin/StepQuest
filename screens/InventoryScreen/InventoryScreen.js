@@ -1,8 +1,10 @@
 // screens/InventoryScreen/InventoryScreen.js
+
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, SectionList, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, Button, SectionList, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from './InventoryScreen.styles';
+import { useIsFocused } from '@react-navigation/native';
 
 const rarityOrder = ['common', 'uncommon', 'rare', 'legendary'];
 
@@ -17,17 +19,32 @@ const getRarityColor = (item) => {
 	}
 };
 
+// Helper to compute rarity level (1 = common, 2 = uncommon, etc.)
+const getRarityLevel = (item) => {
+	if (!item) return 0;
+	// normalize to lowercase so "Common Sword" works
+	const rarity = item.split(' ')[0].toLowerCase();
+	const idx = rarityOrder.indexOf(rarity);
+	return idx >= 0 ? idx + 1 : 0;
+};
+
 export default function InventoryScreen({ navigation }) {
-	const [sections, setSections] = useState([]);
+	// Initialize with empty sword and armor sections so .data always exists
+	const [sections, setSections] = useState([
+		{ title: 'Swords', data: [] },
+		{ title: 'Armors', data: [] }
+	]);
 	const [equippedSword, setEquippedSword] = useState(null);
 	const [equippedArmor, setEquippedArmor] = useState(null);
 	const [swordCount, setSwordCount] = useState({});
 	const [armorCount, setArmorCount] = useState({});
 	const [unopenedCount, setUnopenedCount] = useState(0);
+	const [statsCollapsed, setStatsCollapsed] = useState(true);
+	const isFocused = useIsFocused();
 
 	useEffect(() => {
-		loadInventory();
-	}, []);
+		if (isFocused) loadInventory();
+	}, [isFocused]);
 
 	const loadInventory = async () => {
 		const invStr = await AsyncStorage.getItem('inventory');
@@ -40,6 +57,19 @@ export default function InventoryScreen({ navigation }) {
 		const armorMap = {};
 		swordsArr.forEach(i => { swordsMap[i] = (swordsMap[i] || 0) + 1; });
 		armorArr.forEach(i => { armorMap[i] = (armorMap[i] || 0) + 1; });
+
+		const swordEq = await AsyncStorage.getItem('equipped_sword');
+		const armorEq = await AsyncStorage.getItem('equipped_armor');
+
+		// Remove one equipped instance from counts
+		if (swordEq && swordsMap[swordEq]) {
+			swordsMap[swordEq] -= 1;
+			if (swordsMap[swordEq] === 0) delete swordsMap[swordEq];
+		}
+		if (armorEq && armorMap[armorEq]) {
+			armorMap[armorEq] -= 1;
+			if (armorMap[armorEq] === 0) delete armorMap[armorEq];
+		}
 
 		const swordsUnique = Object.keys(swordsMap).sort((a, b) => {
 			const ra = rarityOrder.indexOf(a.split(' ')[0]);
@@ -54,9 +84,6 @@ export default function InventoryScreen({ navigation }) {
 			return a.localeCompare(b, 'en', { sensitivity: 'base' });
 		});
 
-		const swordEq = await AsyncStorage.getItem('equipped_sword');
-		const armorEq = await AsyncStorage.getItem('equipped_armor');
-
 		setEquippedSword(swordEq);
 		setEquippedArmor(armorEq);
 		setSwordCount(swordsMap);
@@ -68,99 +95,120 @@ export default function InventoryScreen({ navigation }) {
 		setUnopenedCount(inv.filter(i => i === 'unopened').length);
 	};
 
-	// Combine two items into one of next rarity
-	const combineItem = async (item) => {
-		const [rarity, type] = item.split(' ');
-		const idx = rarityOrder.indexOf(rarity);
-		if (idx < 0 || idx >= rarityOrder.length - 1) return;
-		const count = (type === 'sword' ? swordCount[item] : armorCount[item]);
-		if (count < 2) {
-			Alert.alert('Need at least 2 items to combine');
-			return;
-		}
-		const successRates = { common: 0.9, uncommon: 0.7, rare: 0.5 };
-		const rate = successRates[rarity] || 0;
-		const success = Math.random() < rate;
-		// Remove 2 instances
-		const invStr = await AsyncStorage.getItem('inventory');
-		const inv = invStr ? JSON.parse(invStr) : [];
-		let removed = 0;
-		const newInv = inv.filter(i => {
-			if (i === item && removed < 2) {
-				removed++;
-				return false;
-			}
-			return true;
-		});
-		if (success) {
-			const newRarity = rarityOrder[idx + 1];
-			newInv.push(`${newRarity} ${type}`);
-			Alert.alert('Combine succeeded!', `New item: ${newRarity} ${type}`);
-		} else {
-			Alert.alert('Combine failed', `${item} lost`);
-		}
-		await AsyncStorage.setItem('inventory', JSON.stringify(newInv));
-		loadInventory();
-	};
-
-	const openRewards = () => navigation.navigate('Rewards');
-
+	// Equip / unequip handlers
 	const equipItem = async (item, sectionTitle) => {
 		const type = sectionTitle === 'Swords' ? 'sword' : 'armor';
 		await AsyncStorage.setItem(`equipped_${type}`, item);
 		if (type === 'sword') setEquippedSword(item);
 		else setEquippedArmor(item);
+		loadInventory();
+	};
+	const unequipSword = async () => {
+		await AsyncStorage.removeItem('equipped_sword');
+		setEquippedSword(null);
+		loadInventory();
+	};
+	const unequipArmor = async () => {
+		await AsyncStorage.removeItem('equipped_armor');
+		setEquippedArmor(null);
+		loadInventory();
+	};
+
+	const openRewards = () => navigation.navigate('Rewards');
+
+	// Debug: clear all inventory
+	const clearInventory = async () => {
+		await AsyncStorage.removeItem('inventory');
+		await AsyncStorage.removeItem('equipped_sword');
+		await AsyncStorage.removeItem('equipped_armor');
+		setEquippedSword(null);
+		setEquippedArmor(null);
+		loadInventory();
+	};
+
+	const renderItem = ({ item, section }) => {
+		const isSwordSection = section.title === 'Swords';
+		const count = isSwordSection ? swordCount[item] : armorCount[item];
+		return (
+			<TouchableOpacity onPress={() => equipItem(item, section.title)}>
+				<View style={[styles.itemContainer, { borderColor: getRarityColor(item) }]}>
+					<Text style={styles.itemText}>
+						{item}{count > 1 ? ` x${count}` : ''}
+					</Text>
+				</View>
+			</TouchableOpacity>
+		);
 	};
 
 	return (
 		<View style={styles.container}>
-			{/* Equipped Slots */}
+			{/* Character Stat Block (collapsible) */}
+			<View style={styles.statBlockContainer}>
+				<TouchableOpacity onPress={() => setStatsCollapsed(!statsCollapsed)}>
+					<Text style={styles.statBlockHeader}>
+						Character Stats {statsCollapsed ? '+' : '-'}
+					</Text>
+				</TouchableOpacity>
+				{!statsCollapsed && (
+					<View style={styles.stats}>
+						<Text style={styles.statsText}>Damage: {getRarityLevel(equippedSword) * 10}</Text>
+						<Text style={styles.statsText}>Armor Mitigation: {getRarityLevel(equippedArmor)}</Text>
+					</View>
+				)}
+			</View>
+
+			{/* Equipped Slots (tap to unequip) */}
 			<View style={styles.equippedContainer}>
-				<View style={[styles.slot, { borderColor: getRarityColor(equippedSword) }]}>
+				<TouchableOpacity
+					onPress={unequipSword}
+					style={[styles.slot, { borderColor: getRarityColor(equippedSword) }]}
+				>
 					<Text style={styles.slotLabel}>Sword</Text>
 					<Text style={styles.slotItem}>{equippedSword || 'None'}</Text>
-				</View>
-				<View style={[styles.slot, { borderColor: getRarityColor(equippedArmor) }]}>
+				</TouchableOpacity>
+				<TouchableOpacity
+					onPress={unequipArmor}
+					style={[styles.slot, { borderColor: getRarityColor(equippedArmor) }]}
+				>
 					<Text style={styles.slotLabel}>Armor</Text>
 					<Text style={styles.slotItem}>{equippedArmor || 'None'}</Text>
+				</TouchableOpacity>
+			</View>
+
+			{/* Inventory Sections side by side */}
+			<View style={{ flexDirection: 'row', flex: 1 }}>
+				{/* Swords list */}
+				<View style={{ flex: 1 }}>
+					<Text style={styles.sectionHeader}>Swords</Text>
+					<SectionList
+						sections={[sections[0]]}
+						keyExtractor={(item, idx) => item + idx}
+						renderItem={renderItem}
+						contentContainerStyle={styles.listContent}
+					/>
+				</View>
+
+				{/* Armors list */}
+				<View style={{ flex: 1 }}>
+					<Text style={styles.sectionHeader}>Armors</Text>
+					<SectionList
+						sections={[sections[1]]}
+						keyExtractor={(item, idx) => item + idx}
+						renderItem={renderItem}
+						contentContainerStyle={styles.listContent}
+					/>
 				</View>
 			</View>
 
-			{/* Inventory Sections */}
-			<SectionList
-				sections={sections}
-				keyExtractor={(item, idx) => item + idx}
-				renderSectionHeader={({ section: { title } }) => (
-					<Text style={styles.sectionHeader}>{title}</Text>
-				)}
-				renderItem={({ item, section }) => {
-					const isSwordSection = section.title === 'Swords';
-					const count = isSwordSection ? swordCount[item] : armorCount[item];
-					const isEquipped = item === (isSwordSection ? equippedSword : equippedArmor);
-					const canCombine = count >= 2 && rarityOrder.indexOf(item.split(' ')[0]) < rarityOrder.length - 1;
-					return (
-						<View style={{ flexDirection: 'row', alignItems: 'center' }}>
-							<TouchableOpacity onPress={() => equipItem(item, section.title)} style={{ flex: 1 }}>
-								<View style={[styles.itemContainer, { borderColor: getRarityColor(item) }]}>
-									<Text style={styles.itemText}>{item}{count > 1 ? ` x${count}` : ''}</Text>
-									{isEquipped && <Text style={styles.check}>✅</Text>}
-								</View>
-							</TouchableOpacity>
-							{canCombine && (
-								<View style={styles.combineButtonContainer}>
-									<Button title="🔨" onPress={() => combineItem(item)} />
-								</View>
-							)}
-						</View>
-					);
-				}}
-				contentContainerStyle={styles.listContent}
-			/>
-
 			{/* Rewards Button */}
 			<View style={styles.rewardsContainer}>
-				<Text style={styles.rewardsText}>Unopened Rewards: {unopenedCount}</Text>
-				<Button title="Open Rewards" onPress={openRewards} />
+				<Text style={styles.rewardsText}>Unopened Items: {unopenedCount}</Text>
+				<Button title="Open Items" onPress={openRewards} />
+			</View>
+
+			{/* Debug: Clear Inventory button bottom-left */}
+			<View style={{ position: 'absolute', left: 10, bottom: 10 }}>
+				<Button title="Clear Inventory" onPress={clearInventory} />
 			</View>
 		</View>
 	);

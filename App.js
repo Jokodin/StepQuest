@@ -6,6 +6,7 @@ import HomeScreen from './screens/HomeScreen/HomeScreen';
 import InventoryScreen from './screens/InventoryScreen/InventoryScreen';
 import BattleScreen from './screens/BattleScreen/BattleScreen';
 import RewardsScreen from './screens/RewardsScreen/RewardsScreen';
+import StoreScreen from './screens/StoreScreen/StoreScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -17,6 +18,7 @@ export default function App() {
 				<Stack.Screen name="Inventory" component={InventoryScreen} />
 				<Stack.Screen name="Battle" component={BattleScreen} />
 				<Stack.Screen name="Rewards" component={RewardsScreen} />
+				<Stack.Screen name="Store" component={StoreScreen} />
 			</Stack.Navigator>
 		</NavigationContainer>
 	);

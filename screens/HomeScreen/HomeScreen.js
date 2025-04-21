@@ -1,38 +1,116 @@
 // screens/HomeScreen/HomeScreen.js
+
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Button, ScrollView } from 'react-native';
+import { View, Text, Button } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import GoogleFit, { Scopes } from 'react-native-google-fit';
+import GoogleFit from 'react-native-google-fit';
+import { useIsFocused } from '@react-navigation/native';
+import { authorizeFit } from './GoogleFitAuth';
 import styles from './HomeScreen.styles';
+import HuntPanel from './Hunt/HuntPanel';
+import EarnPanel from './EarnPanel';
+import ExplorePanel from './ExplorePanel';
+import useHuntSteps from './Hunt/useHuntSteps';  // <-- new hook
 
-const STEP_GOAL = 100;
 const DAILY_GOAL = 10000;
-const FIGHT_DURATION = 10; // seconds
+const FIGHT_DURATION = 3; // seconds
+const DEFAULT_GOLD_PER_STEP = 0.10;
 
+// now each monster only has a level
 const monsterList = [
-	{ name: 'Goblin', hp: 50, attack: 5 },
-	{ name: 'Skeleton', hp: 40, attack: 7 },
-	{ name: 'Orc', hp: 60, attack: 8 },
-	{ name: 'Slime', hp: 30, attack: 3 },
-	{ name: 'Troll', hp: 80, attack: 10 },
+	{ name: 'Slime', level: 1 },
+	{ name: 'Goblin', level: 2 },
+	{ name: 'Skeleton', level: 3 },
+	{ name: 'Orc', level: 4 },
+	{ name: 'Troll', level: 5 },
 ];
 
-function getRandomMonster() {
-	return { ...monsterList[Math.floor(Math.random() * monsterList.length)] };
+// helper to compute hp and attack from level
+function withStats(mon) {
+	return {
+		...mon,
+		hp: mon.level * 50,
+		attack: mon.level * 10,
+	};
 }
 
-export default function HomeScreen() {
+const rarityOrder = ['common', 'uncommon', 'rare', 'legendary'];
+function getItemLevel(itemName) {
+	if (!itemName) return 1;
+	const rarity = itemName.split(' ')[0].toLowerCase();
+	const idx = rarityOrder.indexOf(rarity);
+	return idx >= 0 ? idx + 1 : 1;
+}
+
+// Simulate win chance vs a single monster, factoring in weapon attack & armor mitigation
+function simulateWinChance(playerHP, playerAtk, armorMit, monster, sims = 100) {
+	const stats = withStats(monster);
+	let wins = 0;
+	for (let i = 0; i < sims; i++) {
+		let hp = playerHP;
+		let mHP = stats.hp;
+		while (hp > 0 && mHP > 0) {
+			mHP -= playerAtk;
+			if (mHP <= 0) {
+				wins++;
+				break;
+			}
+			const rawDmg = 1 + Math.floor(Math.random() * stats.attack);
+			const netDmg = Math.max(1, rawDmg - armorMit);
+			hp -= netDmg;
+		}
+	}
+	return Math.round((wins / sims) * 100);
+}
+
+export default function HomeScreen({ navigation }) {
+	// Authorization readiness
+	const [fitReady, setFitReady] = useState(false);
+
+	// Navigation focus
+	const isFocused = useIsFocused();
+
 	// Activity & Steps
-	const [activity, setActivity] = useState('scavenge');
-	const [stepsInCycle, setStepsInCycle] = useState(0);
-	const [huntSteps, setHuntSteps] = useState(0);
-	const [openSteps, setOpenSteps] = useState(0);               // NEW
-	const [huntReady, setHuntReady] = useState(false);
-	const [openReady, setOpenReady] = useState(false);           // NEW
-	const [huntMonster, setHuntMonster] = useState(null);
-	const [inventory, setInventory] = useState([]);              // NEW
-	const monsterPickedRef = useRef(false);
+	const [activity, setActivity] = useState('hunt');
+	const [dailySteps, setDailySteps] = useState(0);
+	const isActivityInitialized = useRef(false);
+
+	useEffect(() => {
+		if (isActivityInitialized.current) {
+			AsyncStorage.setItem('activity', activity);
+		} else {
+			isActivityInitialized.current = true;
+		}
+	}, [activity]);
+
+	// selected monster + win chances
+	const [selectedMonsterName, setSelectedMonsterName] = useState(monsterList[0].name);
+	const [winChances, setWinChances] = useState({});
+
+	// hunt logic moved to hook
+	const {
+		huntSteps,
+		huntReady,
+		huntMonster,
+		setHuntMonster,
+		setHuntReady,
+		debugHuntSteps,
+		resetHunt
+	} = useHuntSteps(fitReady, activity === 'hunt', selectedMonsterName);
+
+	// Explore-specific state
+	const [exploreSteps, setExploreSteps] = useState(0);
+	const [exploreLevel, setExploreLevel] = useState(1);
+	const [exploreReady, setExploreReady] = useState(false);
+
+	// Earn-gold state
+	const [goldPerStep] = useState(DEFAULT_GOLD_PER_STEP);
+	const [gold, setGold] = useState(0);
+
+	// Equipment
+	const [equippedSword, setEquippedSword] = useState(null);
+	const [equippedArmor, setEquippedArmor] = useState(null);
 
 	// Battle state
 	const [fighting, setFighting] = useState(false);
@@ -46,177 +124,167 @@ export default function HomeScreen() {
 	const logIntervalRef = useRef(null);
 	const timerRef = useRef(null);
 
-	// Monster-attack countdown
-	const [attackTimer, setAttackTimer] = useState(30);
-	useEffect(() => {
-		const id = setInterval(() => setAttackTimer(t => (t > 0 ? t - 1 : 0)), 1000);
-		return () => clearInterval(id);
-	}, []);
-	const formatTimer = s =>
-		`${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`;
+	// Interval refs for other modes
+	const earnInterval = useRef(null);
+	const exploreInterval = useRef(null);
+	const dailyInterval = useRef(null);
 
-	// Daily steps tracker
-	const [dailySteps, setDailySteps] = useState(0);
-	const fetchDailySteps = async () => {
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const est = res.find(r => r.source === 'com.google.android.gms:estimated_steps');
-		setDailySteps(est?.steps?.[0]?.value || 0);
-	};
-	useEffect(() => {
-		fetchDailySteps();
-		const id = setInterval(fetchDailySteps, 60000);
-		return () => clearInterval(id);
-	}, []);
-
-	// Load inventory
+	// Load persisted data on mount
 	useEffect(() => {
 		(async () => {
-			const invStr = await AsyncStorage.getItem('inventory');
-			setInventory(invStr ? JSON.parse(invStr) : []);
+			const storedGold = parseFloat(await AsyncStorage.getItem('gold'));
+			setGold(isNaN(storedGold) ? 0 : storedGold);
+
+			const storedLevel = parseInt(await AsyncStorage.getItem('exploreLevel'), 10);
+			if (!isNaN(storedLevel) && storedLevel > 0) {
+				setExploreLevel(storedLevel);
+			}
+
+			const sw = await AsyncStorage.getItem('equippedSword');
+			const ar = await AsyncStorage.getItem('equippedArmor');
+			setEquippedSword(sw);
+			setEquippedArmor(ar);
+
+			const lastAct = await AsyncStorage.getItem('activity');
+			if (lastAct === 'hunt' || lastAct === 'earn' || lastAct === 'explore') {
+				setActivity(lastAct);
+			}
 		})();
 	}, []);
 
-	// Polling refs
-	const huntInterval = useRef(null);
-	const openInterval = useRef(null);                             // NEW
-
-	// Google Fit auth
-	const authorizeFit = async () => {
-		const auth = await GoogleFit.authorize({
-			scopes: [Scopes.FITNESS_ACTIVITY_READ, Scopes.FITNESS_ACTIVITY_WRITE],
-		});
-		if (!auth.success) console.error('Google Fit Auth Failure');
-		return auth.success;
-	};
-
-	// Scavenge polling
-	const fetchScavenge = async () => {
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const total = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-			?.steps?.[0]?.value || 0;
-		const last = parseInt(await AsyncStorage.getItem('lastTotalSteps')) || total;
-		const delta = Math.max(0, total - last);
-		const prev = parseInt(await AsyncStorage.getItem('stepsInCycle')) || 0;
-		const newCycle = prev + delta;
-
-		const rewards = Math.floor(newCycle / STEP_GOAL);
-		if (rewards > 0) {
-			const inv = JSON.parse(await AsyncStorage.getItem('inventory') || '[]');
-			for (let i = 0; i < rewards; i++) inv.push('unopened');
-			await AsyncStorage.setItem('inventory', JSON.stringify(inv));
-			setInventory(inv);                                  // update inventory
-		}
-
-		const leftover = newCycle % STEP_GOAL;
-		setStepsInCycle(leftover);
-		await AsyncStorage.setItem('stepsInCycle', leftover.toString());
-		await AsyncStorage.setItem('lastTotalSteps', total.toString());
-	};
-
-	// Hunt polling & monster pick
-	const fetchHunt = async () => {
-		if (monsterPickedRef.current) return;
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const total = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-			?.steps?.[0]?.value || 0;
-		const last = parseInt(await AsyncStorage.getItem('lastTotalHuntSteps')) || total;
-		const delta = Math.max(0, total - last);
-		const prev = parseInt(await AsyncStorage.getItem('huntStepsInCycle')) || 0;
-		const newCycle = prev + delta;
-
-		if (newCycle >= STEP_GOAL) {
-			setHuntMonster(getRandomMonster());
-			setHuntReady(true);
-			monsterPickedRef.current = true;
-			clearInterval(huntInterval.current);
-			return;
-		}
-
-		setHuntSteps(newCycle);
-		await AsyncStorage.setItem('huntStepsInCycle', newCycle.toString());
-		await AsyncStorage.setItem('lastTotalHuntSteps', total.toString());
-	};
-
-	// Open items polling
-	const fetchOpen = async () => {
-		if (openReady) return;
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const total = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-			?.steps?.[0]?.value || 0;
-		const last = parseInt(await AsyncStorage.getItem('lastTotalOpenSteps')) || total;
-		const delta = Math.max(0, total - last);
-		const prev = parseInt(await AsyncStorage.getItem('openStepsInCycle')) || 0;
-		const newCycle = prev + delta;
-
-		if (newCycle >= STEP_GOAL) {
-			setOpenReady(true);
-			clearInterval(openInterval.current);
-			return;
-		}
-
-		setOpenSteps(newCycle);
-		await AsyncStorage.setItem('openStepsInCycle', newCycle.toString());
-		await AsyncStorage.setItem('lastTotalOpenSteps', total.toString());
-	};
-
-	// Initialize on activity change
+	// Refresh gold counter when returning to this screen
 	useEffect(() => {
-		(async () => {
-			if (!(await authorizeFit())) return;
-			const start = new Date(); start.setHours(0, 0, 0, 0);
+		if (isFocused) {
+			(async () => {
+				const storedGold = parseFloat(await AsyncStorage.getItem('gold'));
+				setGold(isNaN(storedGold) ? 0 : storedGold);
+			})();
+		}
+	}, [isFocused]);
+
+	// Helper to fetch total steps from midnight
+	const fetchTotalSteps = async () => {
+		const start = new Date();
+		start.setHours(0, 0, 0, 0);
+		try {
 			const res = await GoogleFit.getDailyStepCountSamples({
 				startDate: start.toISOString(),
 				endDate: new Date().toISOString(),
 			});
-			const totalNow = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-				?.steps?.[0]?.value || 0;
+			const sample = res.find(r => r.source === 'com.google.android.gms:estimated_steps');
+			return sample?.steps?.reduce((sum, entry) => sum + entry.value, 0) || 0;
+		} catch (err) {
+			console.error('Step fetch error', err);
+			return 0;
+		}
+	};
 
-			clearInterval(huntInterval.current);
-			clearInterval(openInterval.current);
+	// Main effect: authorize & set up polling for earn & explore modes
+	useEffect(() => {
+		(async () => {
+			const ok = await authorizeFit();
+			setFitReady(ok);
+		})();
+	}, []);
 
-			if (activity === 'scavenge') {
-				await AsyncStorage.setItem('lastTotalSteps', totalNow.toString());
-				setStepsInCycle(parseInt(await AsyncStorage.getItem('stepsInCycle')) || 0);
-				await fetchScavenge();
-				huntInterval.current = setInterval(fetchScavenge, 5000);
-			} else if (activity === 'hunt') {
-				await AsyncStorage.setItem('lastTotalHuntSteps', totalNow.toString());
-				setHuntSteps(parseInt(await AsyncStorage.getItem('huntStepsInCycle')) || 0);
-				setHuntReady(false);
-				monsterPickedRef.current = false;
-				setFightCompleted(false);
-				fightCompletedRef.current = false;
-				await fetchHunt();
-				huntInterval.current = setInterval(fetchHunt, 5000);
-			} else if (activity === 'open') {
-				await AsyncStorage.setItem('lastTotalOpenSteps', totalNow.toString());
-				setOpenSteps(parseInt(await AsyncStorage.getItem('openStepsInCycle')) || 0);
-				setOpenReady(false);
-				await fetchOpen();
-				openInterval.current = setInterval(fetchOpen, 5000);
+	useEffect(() => {
+		if (!fitReady) return;
+
+		const clearAll = () => {
+			clearInterval(earnInterval.current);
+			clearInterval(exploreInterval.current);
+			clearInterval(dailyInterval.current);
+		};
+		clearAll();
+
+		(async () => {
+			setDailySteps(await fetchTotalSteps());
+		})();
+		dailyInterval.current = setInterval(async () => {
+			setDailySteps(await fetchTotalSteps());
+		}, 60000);
+
+		(async () => {
+			const totalNow = await fetchTotalSteps();
+			await AsyncStorage.setItem('lastTotalEarnSteps', totalNow.toString());
+			await AsyncStorage.setItem('lastTotalExploreSteps', totalNow.toString());
+
+			setExploreSteps(parseInt(await AsyncStorage.getItem('exploreStepsInCycle'), 10) || 0);
+			setExploreReady(false);
+
+			if (activity === 'earn') {
+				await fetchEarn();
+				earnInterval.current = setInterval(fetchEarn, 5000);
+			} else if (activity === 'explore') {
+				await fetchExplore();
+				exploreInterval.current = setInterval(fetchExplore, 5000);
 			}
 		})();
-		return () => {
-			clearInterval(huntInterval.current);
-			clearInterval(openInterval.current);
-		};
-	}, [activity]);
+
+		return clearAll;
+	}, [fitReady, activity, exploreLevel]);
+
+	const fetchEarn = async () => {
+		const total = await fetchTotalSteps();
+		const last = parseInt(await AsyncStorage.getItem('lastTotalEarnSteps'), 10) || total;
+		const delta = Math.max(0, total - last);
+		if (delta > 0) {
+			const gain = delta * goldPerStep;
+			const newGold = gold + gain;
+			setGold(newGold);
+			await AsyncStorage.setItem('gold', newGold.toString());
+			await AsyncStorage.setItem('lastTotalEarnSteps', total.toString());
+		}
+	};
+
+	const fetchExplore = async () => {
+		const goal = exploreLevel * 1000;
+		if (exploreReady) return;
+		const total = await fetchTotalSteps();
+		const last = parseInt(await AsyncStorage.getItem('lastTotalExploreSteps'), 10) || total;
+		const prev = parseInt(await AsyncStorage.getItem('exploreStepsInCycle'), 10) || 0;
+		const delta = Math.max(0, total - last);
+		const newCycle = prev + delta;
+
+		if (newCycle >= goal) {
+			setExploreReady(true);
+			clearInterval(exploreInterval.current);
+		} else {
+			setExploreSteps(newCycle);
+			await AsyncStorage.setItem('exploreStepsInCycle', newCycle.toString());
+			await AsyncStorage.setItem('lastTotalExploreSteps', total.toString());
+		}
+	};
+
+	// Simulate win chances when dependencies change
+	useEffect(() => {
+		const atkLevel = getItemLevel(equippedSword);
+		const playerAtk = atkLevel * 10;
+		const armorMit = getItemLevel(equippedArmor) * 10;
+		const map = {};
+		monsterList.forEach(mon => {
+			map[mon.name] = simulateWinChance(playerHP, playerAtk, armorMit, mon);
+		});
+		setWinChances(map);
+	}, [playerHP, equippedSword, equippedArmor]);
+
+	// Update huntMonster if user re-selects after ready
+	useEffect(() => {
+		if (activity === 'hunt' && huntReady) {
+			const base = monsterList.find(m => m.name === selectedMonsterName) || monsterList[0];
+			setHuntMonster(withStats(base));
+		}
+	}, [selectedMonsterName, huntReady]);
+
+	// Handle explore completion
+	const handleExploreComplete = async () => {
+		setExploreSteps(0);
+		setExploreReady(false);
+		await AsyncStorage.setItem('exploreStepsInCycle', '0');
+		const next = exploreLevel + 1;
+		setExploreLevel(next);
+		await AsyncStorage.setItem('exploreLevel', next.toString());
+	};
 
 	// Start fight simulation
 	const startFight = () => {
@@ -225,29 +293,29 @@ export default function HomeScreen() {
 		setBattleLog([]);
 		setRemainingTime(FIGHT_DURATION);
 
-		const monster = huntMonster;
-		const rounds = Math.ceil(monster.hp / 10);
-		let totalDamage = 0;
+		const stats = withStats(huntMonster);
+		let monsterHP = stats.hp;
+		let playerCurrentHP = playerHP;
 		const log = [];
-		let hp = playerHP;
 
-		for (let i = 0; i < rounds; i++) {
-			const pd = 10;
-			const md = i < rounds - 1
-				? 1 + Math.floor(Math.random() * monster.attack)
-				: 0;
-			totalDamage += md;
-			log.push(`🌀 Round ${i + 1}`);
-			log.push(`🗡️ You hit ${monster.name} for ${pd}`);
-			if (i < rounds - 1) {
-				hp = Math.max(hp - md, 0);
-				log.push(`💥 ${monster.name} hits YOU for ${md}`);
+		const playerAtk = getItemLevel(equippedSword) * 10;
+		const armorMit = getItemLevel(equippedArmor) * 10;
+
+		while (monsterHP > 0 && playerCurrentHP > 0) {
+			monsterHP -= playerAtk;
+			log.push(`🗡️ You hit ${stats.name} for ${playerAtk} (${Math.max(monsterHP, 0)}/${stats.hp})`);
+			if (monsterHP > 0) {
+				const rawDmg = 1 + Math.floor(Math.random() * stats.attack);
+				const netDmg = Math.max(1, rawDmg - armorMit);
+				playerCurrentHP -= netDmg;
+				log.push(`💥 ${stats.name} hits YOU for ${netDmg} (${Math.max(playerCurrentHP, 0)}/100)`);
 			}
 		}
 
 		fullLogRef.current = log;
 		let idx = 0;
 		const lineInterval = (FIGHT_DURATION * 1000) / log.length;
+
 		logIntervalRef.current = setInterval(() => {
 			setBattleLog(prev => {
 				const next = [...prev, fullLogRef.current[idx]];
@@ -263,15 +331,12 @@ export default function HomeScreen() {
 					clearInterval(timerRef.current);
 					clearInterval(logIntervalRef.current);
 					if (!fightCompletedRef.current) {
-						const remainingHP = playerHP - totalDamage;
-						if (remainingHP > 0) {
-							setPlayerHP(remainingHP);
-							log.push(`🎉 You won! HP now ${remainingHP}.`);
-						} else {
-							setPlayerHP(100);
-							log.push(`💀 Defeated. HP reset to 100.`);
-						}
-						setBattleLog(prev => [...prev, log[log.length - 1]]);
+						setPlayerHP(playerCurrentHP);
+						const resultText = playerCurrentHP > 0
+							? `🎉 You won! Remaining HP: ${playerCurrentHP}`
+							: `💀 You were defeated. HP reset to 100`;
+						setBattleLog(prev => [...prev, resultText]);
+						if (playerCurrentHP <= 0) setPlayerHP(100);
 						setFightCompleted(true);
 						fightCompletedRef.current = true;
 					}
@@ -286,152 +351,87 @@ export default function HomeScreen() {
 	// Return / Run away
 	const handleReturn = async () => {
 		setBattleLog([]);
-		setHuntSteps(0);
-		setHuntReady(false);
+		// reset our hunt hook back to zero and clear the monster
+		resetHunt();
 		setFightCompleted(false);
 		fightCompletedRef.current = false;
-		monsterPickedRef.current = false;
-
-		await AsyncStorage.setItem('huntStepsInCycle', '0');
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const totalNow = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-			?.steps?.[0]?.value || 0;
-		await AsyncStorage.setItem('lastTotalHuntSteps', totalNow.toString());
-
-		await fetchHunt();
-		huntInterval.current = setInterval(fetchHunt, 5000);
 	};
 
-	// Open an item
-	const handleOpen = async () => {
-		const invStr = await AsyncStorage.getItem('inventory');
-		const inv = invStr ? JSON.parse(invStr) : [];
-		const idx = inv.indexOf('unopened');
-		if (idx !== -1) {
-			inv.splice(idx, 1);
-			await AsyncStorage.setItem('inventory', JSON.stringify(inv));
-			setInventory(inv);
-		}
-		setOpenSteps(0);
-		setOpenReady(false);
-		await AsyncStorage.setItem('openStepsInCycle', '0');
-
-		const start = new Date(); start.setHours(0, 0, 0, 0);
-		const res = await GoogleFit.getDailyStepCountSamples({
-			startDate: start.toISOString(),
-			endDate: new Date().toISOString(),
-		});
-		const totalNow = res.find(r => r.source === 'com.google.android.gms:estimated_steps')
-			?.steps?.[0]?.value || 0;
-		await AsyncStorage.setItem('lastTotalOpenSteps', totalNow.toString());
-
-		await fetchOpen();
-		openInterval.current = setInterval(fetchOpen, 5000);
-	};
-
-	// Debug
+	// Debug: manually add steps/gold
 	const addDebugSteps = async () => {
-		if (activity === 'scavenge') {
-			const v = stepsInCycle + 10;
-			setStepsInCycle(v);
-			await AsyncStorage.setItem('stepsInCycle', v.toString());
-		} else if (activity === 'hunt') {
-			const v = huntSteps + 10;
-			if (v >= STEP_GOAL && !monsterPickedRef.current) {
-				setHuntMonster(getRandomMonster());
-				setHuntReady(true);
-				monsterPickedRef.current = true;
-			}
-			setHuntSteps(v);
-			await AsyncStorage.setItem('huntStepsInCycle', v.toString());
-		} else if (activity === 'open') {
-			const v = openSteps + 10;
-			if (v >= STEP_GOAL && !openReady) {
-				setOpenReady(true);
-			}
-			setOpenSteps(v);
-			await AsyncStorage.setItem('openStepsInCycle', v.toString());
+		if (activity === 'hunt') {
+			debugHuntSteps(10);
+		} else if (activity === 'earn') {
+			const gain = 1000 * goldPerStep;
+			const newGold = gold + gain;
+			setGold(newGold);
+			await AsyncStorage.setItem('gold', newGold.toString());
+			const last = parseInt(await AsyncStorage.getItem('lastTotalEarnSteps'), 10) || 0;
+			await AsyncStorage.setItem('lastTotalEarnSteps', (last + 10).toString());
+		} else {
+			const v = exploreSteps + 1000;
+			setExploreSteps(v);
+			await AsyncStorage.setItem('exploreStepsInCycle', v.toString());
 		}
 	};
-
-	const showOpenOption = inventory.includes('unopened');
 
 	return (
 		<View style={styles.container}>
-			<Text style={styles.timer}>
-				Next monster attack: {formatTimer(attackTimer)}
-			</Text>
-
 			<Text style={styles.pickerLabel}>Choose an activity:</Text>
 			<Picker
 				selectedValue={activity}
 				onValueChange={setActivity}
 				style={styles.picker}
-				dropdownIconColor="#fff"
 			>
-				<Picker.Item label="Scavenge for Items" value="scavenge" />
 				<Picker.Item label="Hunt Monsters" value="hunt" />
-				{showOpenOption && (
-					<Picker.Item label="Open Items" value="open" />
-				)}
+				<Picker.Item label="Earn Gold" value="earn" />
+				<Picker.Item label="Explore" value="explore" />
 			</Picker>
 
-			<View style={styles.main}>
-				{activity === 'scavenge' && (
-					<Text style={styles.counter}>{stepsInCycle} / {STEP_GOAL} steps</Text>
+			<View style={[styles.main, activity === 'hunt' && { justifyContent: 'flex-start' }]}>
+				{activity === 'hunt' && (
+					<HuntPanel
+						huntSteps={huntSteps}
+						huntReady={huntReady}
+						huntingMonster={huntMonster}
+						fighting={fighting}
+						fightCompleted={fightCompleted}
+						remainingTime={remainingTime}
+						battleLog={battleLog}
+						onStartFight={startFight}
+						onReturn={handleReturn}
+						selectedMonsterName={selectedMonsterName}
+						onSelectMonster={setSelectedMonsterName}
+						winChances={winChances}
+						monsterOptions={monsterList}
+						exploreLevel={exploreLevel}
+					/>
 				)}
 
-				{activity === 'hunt' && !huntReady && !fighting && !fightCompleted && (
-					<Text style={styles.counter}>{huntSteps} / {STEP_GOAL} steps</Text>
-				)}
+				{activity === 'earn' && <EarnPanel goldPerStep={goldPerStep} gold={gold} />}
 
-				{activity === 'hunt' && huntReady && !fighting && !fightCompleted && (
-					<>
-						<Text style={styles.label}>A wild {huntMonster.name} appears!</Text>
-						<View style={styles.fightButtons}>
-							<View style={styles.actionButton}>
-								<Button title="Start Fight" onPress={startFight} />
-							</View>
-							<View style={styles.actionButton}>
-								<Button title="Run Away" onPress={handleReturn} />
-							</View>
-						</View>
-					</>
-				)}
-
-				{activity === 'hunt' && (fighting || fightCompleted) && (
-					<>
-						<Text style={styles.label}>
-							{fighting
-								? `Fighting ${huntMonster.name}... (${remainingTime}s)`
-								: 'Fight over.'}
-						</Text>
-						<ScrollView style={styles.logContainer}>
-							{battleLog.map((line, i) => (
-								<Text key={i} style={styles.logText}>{line}</Text>
-							))}
-						</ScrollView>
-					</>
-				)}
-
-				{activity === 'hunt' && fightCompleted && (
-					<Button title="Return" onPress={handleReturn} />
-				)}
-
-				{activity === 'open' && !openReady && (
-					<Text style={styles.counter}>{openSteps} / {STEP_GOAL} steps</Text>
-				)}
-				{activity === 'open' && openReady && (
-					<Button title="Open Item" onPress={handleOpen} />
+				{activity === 'explore' && (
+					<ExplorePanel
+						exploreSteps={exploreSteps}
+						exploreLevel={exploreLevel}
+						exploreReady={exploreReady}
+						exploreGoal={exploreLevel * 1000}
+						onExploreComplete={handleExploreComplete}
+					/>
 				)}
 			</View>
 
 			<View style={styles.debugButtonContainer}>
-				<Button title="+10 steps" onPress={addDebugSteps} />
+				<Button title="+steps" onPress={addDebugSteps} />
+			</View>
+
+			<View style={styles.buttonRow}>
+				<View style={styles.buttonWrapper}>
+					<Button title="Go to Store" onPress={() => navigation.navigate('Store')} />
+				</View>
+				<View style={styles.buttonWrapper}>
+					<Button title="Go to Inventory" onPress={() => navigation.navigate('Inventory')} />
+				</View>
 			</View>
 
 			<View style={styles.dailyContainer}>
