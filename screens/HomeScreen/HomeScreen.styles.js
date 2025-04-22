@@ -129,5 +129,10 @@ export default StyleSheet.create({
 		flex: 1,                 // take equal share of the row
 		marginHorizontal: 4,     // small gap between them
 	},
+	// add to your styles object
+	exploreContainer: {
+		alignItems: 'center',
+		marginVertical: 10,
+	},
 
 });

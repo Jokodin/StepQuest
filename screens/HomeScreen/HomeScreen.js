@@ -5,13 +5,15 @@ import { View, Text, Button } from 'react-native';
 import { Picker } from '@react-native-picker/picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import GoogleFit from 'react-native-google-fit';
-import { useIsFocused } from '@react-navigation/native';
 import { authorizeFit } from './GoogleFitAuth';
 import styles from './HomeScreen.styles';
 import HuntPanel from './Hunt/HuntPanel';
+import useHuntSteps from './Hunt/useHuntSteps';
+import { withStats, simulateWinChance } from './Hunt/huntUtils';
 import EarnPanel from './EarnPanel';
+import useEarnSteps from './Earn/useEarnSteps';
 import ExplorePanel from './ExplorePanel';
-import useHuntSteps from './Hunt/useHuntSteps';  // <-- new hook
+import useExploreSteps from './Explore/useExploreSteps';
 
 const DAILY_GOAL = 10000;
 const FIGHT_DURATION = 3; // seconds
@@ -26,15 +28,6 @@ const monsterList = [
 	{ name: 'Troll', level: 5 },
 ];
 
-// helper to compute hp and attack from level
-function withStats(mon) {
-	return {
-		...mon,
-		hp: mon.level * 50,
-		attack: mon.level * 10,
-	};
-}
-
 const rarityOrder = ['common', 'uncommon', 'rare', 'legendary'];
 function getItemLevel(itemName) {
 	if (!itemName) return 1;
@@ -43,33 +36,9 @@ function getItemLevel(itemName) {
 	return idx >= 0 ? idx + 1 : 1;
 }
 
-// Simulate win chance vs a single monster, factoring in weapon attack & armor mitigation
-function simulateWinChance(playerHP, playerAtk, armorMit, monster, sims = 100) {
-	const stats = withStats(monster);
-	let wins = 0;
-	for (let i = 0; i < sims; i++) {
-		let hp = playerHP;
-		let mHP = stats.hp;
-		while (hp > 0 && mHP > 0) {
-			mHP -= playerAtk;
-			if (mHP <= 0) {
-				wins++;
-				break;
-			}
-			const rawDmg = 1 + Math.floor(Math.random() * stats.attack);
-			const netDmg = Math.max(1, rawDmg - armorMit);
-			hp -= netDmg;
-		}
-	}
-	return Math.round((wins / sims) * 100);
-}
-
 export default function HomeScreen({ navigation }) {
 	// Authorization readiness
 	const [fitReady, setFitReady] = useState(false);
-
-	// Navigation focus
-	const isFocused = useIsFocused();
 
 	// Activity & Steps
 	const [activity, setActivity] = useState('hunt');
@@ -99,14 +68,17 @@ export default function HomeScreen({ navigation }) {
 		resetHunt
 	} = useHuntSteps(fitReady, activity === 'hunt', selectedMonsterName);
 
-	// Explore-specific state
-	const [exploreSteps, setExploreSteps] = useState(0);
-	const [exploreLevel, setExploreLevel] = useState(1);
-	const [exploreReady, setExploreReady] = useState(false);
+	// earn‑gold logic moved to hook
+	const { gold } = useEarnSteps(fitReady, activity === 'earn');
 
-	// Earn-gold state
-	const [goldPerStep] = useState(DEFAULT_GOLD_PER_STEP);
-	const [gold, setGold] = useState(0);
+	// Explore-specific state
+	const {
+		exploreSteps,
+		exploreLevel,
+		exploreReady,
+		onExploreComplete
+	} = useExploreSteps(fitReady, activity === 'explore');
+
 
 	// Equipment
 	const [equippedSword, setEquippedSword] = useState(null);
@@ -125,21 +97,12 @@ export default function HomeScreen({ navigation }) {
 	const timerRef = useRef(null);
 
 	// Interval refs for other modes
-	const earnInterval = useRef(null);
 	const exploreInterval = useRef(null);
 	const dailyInterval = useRef(null);
 
 	// Load persisted data on mount
 	useEffect(() => {
 		(async () => {
-			const storedGold = parseFloat(await AsyncStorage.getItem('gold'));
-			setGold(isNaN(storedGold) ? 0 : storedGold);
-
-			const storedLevel = parseInt(await AsyncStorage.getItem('exploreLevel'), 10);
-			if (!isNaN(storedLevel) && storedLevel > 0) {
-				setExploreLevel(storedLevel);
-			}
-
 			const sw = await AsyncStorage.getItem('equippedSword');
 			const ar = await AsyncStorage.getItem('equippedArmor');
 			setEquippedSword(sw);
@@ -151,16 +114,6 @@ export default function HomeScreen({ navigation }) {
 			}
 		})();
 	}, []);
-
-	// Refresh gold counter when returning to this screen
-	useEffect(() => {
-		if (isFocused) {
-			(async () => {
-				const storedGold = parseFloat(await AsyncStorage.getItem('gold'));
-				setGold(isNaN(storedGold) ? 0 : storedGold);
-			})();
-		}
-	}, [isFocused]);
 
 	// Helper to fetch total steps from midnight
 	const fetchTotalSteps = async () => {
@@ -179,7 +132,7 @@ export default function HomeScreen({ navigation }) {
 		}
 	};
 
-	// Main effect: authorize & set up polling for earn & explore modes
+	// Main effect: authorize & set up polling for explore mode (earn logic removed)
 	useEffect(() => {
 		(async () => {
 			const ok = await authorizeFit();
@@ -191,7 +144,6 @@ export default function HomeScreen({ navigation }) {
 		if (!fitReady) return;
 
 		const clearAll = () => {
-			clearInterval(earnInterval.current);
 			clearInterval(exploreInterval.current);
 			clearInterval(dailyInterval.current);
 		};
@@ -206,16 +158,12 @@ export default function HomeScreen({ navigation }) {
 
 		(async () => {
 			const totalNow = await fetchTotalSteps();
-			await AsyncStorage.setItem('lastTotalEarnSteps', totalNow.toString());
 			await AsyncStorage.setItem('lastTotalExploreSteps', totalNow.toString());
 
 			setExploreSteps(parseInt(await AsyncStorage.getItem('exploreStepsInCycle'), 10) || 0);
 			setExploreReady(false);
 
-			if (activity === 'earn') {
-				await fetchEarn();
-				earnInterval.current = setInterval(fetchEarn, 5000);
-			} else if (activity === 'explore') {
+			if (activity === 'explore') {
 				await fetchExplore();
 				exploreInterval.current = setInterval(fetchExplore, 5000);
 			}
@@ -223,38 +171,6 @@ export default function HomeScreen({ navigation }) {
 
 		return clearAll;
 	}, [fitReady, activity, exploreLevel]);
-
-	const fetchEarn = async () => {
-		const total = await fetchTotalSteps();
-		const last = parseInt(await AsyncStorage.getItem('lastTotalEarnSteps'), 10) || total;
-		const delta = Math.max(0, total - last);
-		if (delta > 0) {
-			const gain = delta * goldPerStep;
-			const newGold = gold + gain;
-			setGold(newGold);
-			await AsyncStorage.setItem('gold', newGold.toString());
-			await AsyncStorage.setItem('lastTotalEarnSteps', total.toString());
-		}
-	};
-
-	const fetchExplore = async () => {
-		const goal = exploreLevel * 1000;
-		if (exploreReady) return;
-		const total = await fetchTotalSteps();
-		const last = parseInt(await AsyncStorage.getItem('lastTotalExploreSteps'), 10) || total;
-		const prev = parseInt(await AsyncStorage.getItem('exploreStepsInCycle'), 10) || 0;
-		const delta = Math.max(0, total - last);
-		const newCycle = prev + delta;
-
-		if (newCycle >= goal) {
-			setExploreReady(true);
-			clearInterval(exploreInterval.current);
-		} else {
-			setExploreSteps(newCycle);
-			await AsyncStorage.setItem('exploreStepsInCycle', newCycle.toString());
-			await AsyncStorage.setItem('lastTotalExploreSteps', total.toString());
-		}
-	};
 
 	// Simulate win chances when dependencies change
 	useEffect(() => {
@@ -275,16 +191,6 @@ export default function HomeScreen({ navigation }) {
 			setHuntMonster(withStats(base));
 		}
 	}, [selectedMonsterName, huntReady]);
-
-	// Handle explore completion
-	const handleExploreComplete = async () => {
-		setExploreSteps(0);
-		setExploreReady(false);
-		await AsyncStorage.setItem('exploreStepsInCycle', '0');
-		const next = exploreLevel + 1;
-		setExploreLevel(next);
-		await AsyncStorage.setItem('exploreLevel', next.toString());
-	};
 
 	// Start fight simulation
 	const startFight = () => {
@@ -349,29 +255,22 @@ export default function HomeScreen({ navigation }) {
 	};
 
 	// Return / Run away
-	const handleReturn = async () => {
+	const handleReturn = () => {
 		setBattleLog([]);
-		// reset our hunt hook back to zero and clear the monster
 		resetHunt();
 		setFightCompleted(false);
 		fightCompletedRef.current = false;
 	};
 
-	// Debug: manually add steps/gold
-	const addDebugSteps = async () => {
+	// Debug: manually add steps
+	const addDebugSteps = () => {
 		if (activity === 'hunt') {
 			debugHuntSteps(10);
-		} else if (activity === 'earn') {
-			const gain = 1000 * goldPerStep;
-			const newGold = gold + gain;
-			setGold(newGold);
-			await AsyncStorage.setItem('gold', newGold.toString());
-			const last = parseInt(await AsyncStorage.getItem('lastTotalEarnSteps'), 10) || 0;
-			await AsyncStorage.setItem('lastTotalEarnSteps', (last + 10).toString());
 		} else {
+			// for explore
 			const v = exploreSteps + 1000;
 			setExploreSteps(v);
-			await AsyncStorage.setItem('exploreStepsInCycle', v.toString());
+			AsyncStorage.setItem('exploreStepsInCycle', v.toString());
 		}
 	};
 
@@ -408,7 +307,12 @@ export default function HomeScreen({ navigation }) {
 					/>
 				)}
 
-				{activity === 'earn' && <EarnPanel goldPerStep={goldPerStep} gold={gold} />}
+				{activity === 'earn' && (
+					<EarnPanel
+						goldPerStep={DEFAULT_GOLD_PER_STEP}
+						gold={gold}
+					/>
+				)}
 
 				{activity === 'explore' && (
 					<ExplorePanel
@@ -416,7 +320,7 @@ export default function HomeScreen({ navigation }) {
 						exploreLevel={exploreLevel}
 						exploreReady={exploreReady}
 						exploreGoal={exploreLevel * 1000}
-						onExploreComplete={handleExploreComplete}
+						onExploreComplete={onExploreComplete}
 					/>
 				)}
 			</View>
