@@ -1,11 +1,11 @@
 // components/Header.js
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
 	View,
 	Text,
-	TouchableOpacity,
 	StyleSheet,
+	TouchableOpacity,
 } from 'react-native';
 import { useNavigation, useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -16,6 +16,7 @@ export default function Header({ title }) {
 	const focused = useIsFocused();
 	const [gold, setGold] = useState(0);
 
+	// load gold whenever the screen comes into focus
 	useEffect(() => {
 		if (focused) {
 			AsyncStorage.getItem('gold').then(value => {
@@ -24,9 +25,24 @@ export default function Header({ title }) {
 		}
 	}, [focused]);
 
+	// handler to add 1000 gold
+	const handleAddGold = useCallback(async () => {
+		try {
+			const value = await AsyncStorage.getItem('gold');
+			const current = value ? parseInt(value, 10) : 0;
+			const updated = current + 1000;
+			await AsyncStorage.setItem('gold', updated.toString());
+			setGold(updated);
+		} catch (e) {
+			console.error('Failed to add gold', e);
+		}
+	}, []);
+
 	return (
 		<View style={styles.header}>
-			<Text style={styles.goldText}>{gold} 💰</Text>
+			<TouchableOpacity onPress={handleAddGold} hitSlop={8}>
+				<Text style={styles.goldText}>{gold} 💰</Text>
+			</TouchableOpacity>
 		</View>
 	);
 }
@@ -36,7 +52,7 @@ const styles = StyleSheet.create({
 		height: 56,
 		flexDirection: 'row',
 		alignItems: 'center',
-		justifyContent: 'flex-end',    // push children to the right
+		justifyContent: 'flex-end',
 		paddingHorizontal: 16,
 		backgroundColor: colors.surface,
 		borderBottomWidth: 1,

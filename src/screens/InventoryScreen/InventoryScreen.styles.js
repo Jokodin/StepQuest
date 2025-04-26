@@ -1,13 +1,19 @@
-// screens/InventoryScreen/InventoryScreen.styles.js
-
-import { StyleSheet } from 'react-native';
+import { StyleSheet, Platform } from 'react-native';
 import { colors } from '@/constants/theme';
 
 export default StyleSheet.create({
+	// overall screen
 	container: {
 		flex: 1,
 		backgroundColor: colors.background,
 	},
+	loadingContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+	},
+
+	// Tabs
 	tabs: {
 		flexDirection: 'row',
 		borderBottomWidth: 1,
@@ -28,27 +34,96 @@ export default StyleSheet.create({
 		fontWeight: '600',
 	},
 
+	// SectionList content padding
 	listContent: {
-		padding: 16,
+		paddingVertical: 16,
+	},
+
+	// Category header “pill” (matches store)
+	sectionHeaderContainer: {
+		backgroundColor: colors.surface,
+		alignSelf: 'stretch',
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingVertical: 8,
+		paddingHorizontal: 16,
+		borderTopWidth: 1,
+		borderColor: 'white',
+		marginTop: 24,
+		...Platform.select({
+			android: { elevation: 2 },
+			ios: {
+				shadowColor: '#000',
+				shadowOffset: { width: 0, height: 1 },
+				shadowOpacity: 0.1,
+				shadowRadius: 2,
+			},
+		}),
 	},
 	sectionHeader: {
 		fontSize: 18,
-		fontWeight: '600',
-		color: colors.text,
-		marginTop: 16,
-		marginBottom: 8,
+		fontWeight: '700',
+		color: colors.primary,
+		textTransform: 'uppercase',
 	},
-	itemContainer: {
-		padding: 12,
-		borderWidth: 1,
-		borderRadius: 8,
-		marginBottom: 8,
-	},
-	itemText: {
-		color: colors.text,
-		fontSize: 16,
+	sectionIcon: {
+		marginRight: 8,
 	},
 
+	// Each item becomes its own “card” that stretches full width
+	// itemContainerWrapper: {
+	// 	marginBottom: 8,
+	// },
+	itemContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		backgroundColor: colors.surface,
+		alignSelf: 'stretch',
+		marginTop: 12,
+		paddingVertical: 12,
+		paddingHorizontal: 16,
+		borderStartWidth: 1,
+		borderColor: 'white',
+		...Platform.select({
+			android: { elevation: 1 },
+			ios: {
+				shadowColor: '#000',
+				shadowOffset: { width: 0, height: 1 },
+				shadowOpacity: 0.05,
+				shadowRadius: 1,
+			},
+		}),
+	},
+	itemContainerPressed: {
+		backgroundColor: 'rgba(0, 0, 0, 0.04)',
+	},
+
+	itemText: {
+		fontSize: 20,
+		fontWeight: '500',
+		color: colors.text,
+	},
+
+	// Expanded stats share the same card styling
+	statsContainer: {
+		alignSelf: 'stretch',
+		backgroundColor: colors.surface,
+		paddingHorizontal: 16,
+		borderStartWidth: 1,
+		borderColor: 'white',
+	},
+	statText: {
+		fontSize: 16,
+		color: 'white',
+		marginBottom: 4,
+	},
+
+	equipButtonContainer: {
+		marginTop: 8,
+	},
+
+	// Equipped tab
 	equippedContainer: {
 		padding: 16,
 	},
@@ -70,6 +145,7 @@ export default StyleSheet.create({
 		color: colors.text,
 	},
 
+	// Banner
 	banner: {
 		position: 'absolute',
 		bottom: 0,
@@ -83,5 +159,10 @@ export default StyleSheet.create({
 		color: colors.surface,
 		fontWeight: '600',
 		fontSize: 14,
+	},
+
+	rarityText: {
+		fontSize: 14,
+		fontWeight: '600',
 	},
 });

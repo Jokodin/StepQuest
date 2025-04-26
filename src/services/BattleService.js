@@ -31,7 +31,7 @@ export class BattleService {
 			};
 		});
 
-		let nextPlayerAttack = 0;
+		let nextPlayerAttack = playerInterval;
 		const logs = [];
 
 		// Helper: random integer [1..max]

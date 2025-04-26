@@ -60,18 +60,6 @@ export default function CharacterScreen({ navigation }) {
 							</View>
 						))}
 					</View>
-
-					{/* Actions */}
-					<View style={styles.actionsRow}>
-						<Button
-							title="Equip Gear"
-							onPress={() => navigation.navigate('Inventory')}
-						/>
-						<Button
-							title="View Skills"
-							onPress={() => navigation.navigate('Skills')}
-						/>
-					</View>
 				</ScrollView>
 			</SafeAreaView>
 		</ScreenLayout>
