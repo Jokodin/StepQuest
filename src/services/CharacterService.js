@@ -14,6 +14,7 @@ class CharacterService {
 	async _init() {
 		try {
 			// AsyncStorage.removeItem(STORAGE_KEY);
+			// AsyncStorage.clear();
 			const stored = await AsyncStorage.getItem(STORAGE_KEY);
 			if (stored) {
 				this.currentCharacter = JSON.parse(stored);
@@ -46,18 +47,15 @@ class CharacterService {
 			id: Date.now().toString(),
 			createdAt: Date.now(),
 			name: 'Joko',
-			avatarUri: null,
 			stats: {
-				hp: 100,            // Health
-				mp: 0,            // Mana
-				stamina: 100,
-				attackPower: 100,
+				health: 100,            // Health
+				mana: 0,            // Mana
+				stamina: 30,
+				attackPower: 1,
 				spellPower: 0,
-				defensePower: 0,
+				defense: 0,
 				attackSpeed: 1,
-				critChance: 0,     // percent
-				dodgeChance: 0,    // percent
-				accuracy: 50,       // percent
+				critChance: 75,     // percent
 				castChance: 0,     // percent
 				blockChance: 0,    // percent
 				age: 0
@@ -111,6 +109,39 @@ class CharacterService {
 			console.error('Failed to save updated character', e);
 		}
 		return updated;
+	}
+
+	/**
+ * Equip an item: add its id to gear list and add its stats.
+ * @param {{ id: string, stats: Record<string,number> }} item
+ */
+	async equipItem(item) {
+		const char = this.getCurrentCharacter();
+		// 1) merge gear array
+		const newGear = Array.from(new Set([...(char.gear || []), item.id]));
+		// 2) compute new stats by summing each stat
+		const newStats = { ...char.stats };
+		for (const [stat, bonus] of Object.entries(item.stats)) {
+			newStats[stat] = (newStats[stat] || 0) + bonus;
+		}
+		// 3) persist both gear & stats
+		await this.updateCharacter({ gear: newGear });
+		return this.updateStats(newStats);
+	}
+
+	/**
+	 * Unequip an item: remove its id and subtract its stats.
+	 * @param {{ id: string, stats: Record<string,number> }} item
+	 */
+	async unequipItem(item) {
+		const char = this.getCurrentCharacter();
+		const newGear = (char.gear || []).filter(gid => gid !== item.id);
+		const newStats = { ...char.stats };
+		for (const [stat, bonus] of Object.entries(item.stats)) {
+			newStats[stat] = (newStats[stat] || 0) - bonus;
+		}
+		await this.updateCharacter({ gear: newGear });
+		return this.updateStats(newStats);
 	}
 }
 

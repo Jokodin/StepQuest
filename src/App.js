@@ -1,5 +1,6 @@
 // App.js
-import React from 'react';
+import React, { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { NavigationContainer, DarkTheme } from '@react-navigation/native';
 import { colors } from '@/constants/theme';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -14,6 +15,9 @@ import PrestigeService from 'src/services/PrestigeService';
 import CharacterService from 'src/services/CharacterService';
 import StoreScreen from './screens/StoreScreen/StoreScreen';
 import { StatusBar } from 'react-native';
+import LogsScreen from './screens/LogsScreen/LogsScreen';
+import '@/services/WalkRewardService';
+import '@/services/StepService';
 
 const Stack = createNativeStackNavigator();
 const MyDarkTheme = {
@@ -46,6 +50,17 @@ TownDefenseService.on('attack', ({ success }) => {
 });
 
 export default function App() {
+	useEffect(() => {
+		TownDefenseService.startAttacks();
+		return () => TownDefenseService.stopAttacks();
+	}, []);
+
+	AppState.addEventListener('change', state => {
+		if (state === 'active') {
+			TownDefenseService.processMissedAttacks();
+		}
+	});
+
 	return (
 		<NavigationContainer>
 
@@ -61,6 +76,7 @@ export default function App() {
 				<Stack.Screen name="BattleLog" component={BattleLogScreen} />
 				<Stack.Screen name="Items" component={InventoryScreen} />
 				<Stack.Screen name="Store" component={StoreScreen} />
+				<Stack.Screen name="Logs" component={LogsScreen} />
 			</Stack.Navigator>
 		</NavigationContainer>
 	);

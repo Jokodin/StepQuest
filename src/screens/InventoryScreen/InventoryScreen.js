@@ -11,33 +11,12 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import styles from './InventoryScreen.styles';
 import { colors } from '@/constants/theme';
 import ScreenLayout from '@/components/ScreenLayout';
 import Item from '@/models/Item';
-
-const categories = [
-	'Weapons',
-	'Shields',
-	'Armors',
-	'Boots',
-	'Gloves',
-	'Helmets',
-	'Jewelry',
-	'Belts',
-];
-
-const sectionIcons = {
-	Weapons: 'sword',
-	Shields: 'shield',
-	Armors: 'human',
-	Boots: 'shoe-formal',
-	Gloves: 'hand-back-left',
-	Helmets: 'hard-hat',
-	Jewelry: 'diamond',
-	Belts: 'soundbar',
-};
+import CharacterService from '@/services/CharacterService';
+import { categories } from '@/services/ItemService';
 
 const rarityRank = { rare: 0, uncommon: 1, common: 2 };
 const rarityColors = {
@@ -61,6 +40,7 @@ export default function InventoryScreen() {
 	// load inventory + equips
 	const loadData = useCallback(async () => {
 		// await AsyncStorage.removeItem('inventory');
+		// await AsyncStorage.clear();
 		const invRaw = await AsyncStorage.getItem('inventory');
 		const invArr = invRaw ? JSON.parse(invRaw) : [];
 		setInventory(invArr.map(obj => Item.fromJSON(obj)));
@@ -85,19 +65,47 @@ export default function InventoryScreen() {
 		setTimeout(() => setBanner(''), 2500);
 	};
 
-	const handleEquip = async (cat, item) => {
-		const key = `equipped_${cat.toLowerCase()}`;
-		await AsyncStorage.setItem(key, JSON.stringify(item.toJSON()));
-		setEquipped(prev => ({ ...prev, [cat]: item }));
-		showBanner(`${item.name} equipped`);
-	};
-	const handleUnequip = async cat => {
-		const item = equipped[cat];
-		if (!item) return;
+	const handleUnequip = async (cat) => {
+		const oldItem = equipped[cat];
+		if (!oldItem) return;
+
+		// 1) remove stat bonuses
+		try {
+			await CharacterService.unequipItem(oldItem);
+		} catch (e) {
+			console.error('Failed to remove character buff', e);
+		}
+
+		// 2) clear UI slot & storage
 		const key = `equipped_${cat.toLowerCase()}`;
 		await AsyncStorage.removeItem(key);
 		setEquipped(prev => ({ ...prev, [cat]: null }));
-		showBanner(`${item.name} unequipped`);
+		showBanner(`${oldItem.name} unequipped`);
+	};
+
+	const handleEquip = async (cat, newItem) => {
+		// 1) subtract old item stats (if any)
+		const oldItem = equipped[cat];
+		if (oldItem) {
+			try {
+				await CharacterService.unequipItem(oldItem);
+			} catch (e) {
+				console.error('Failed to remove old item buff', e);
+			}
+		}
+
+		// 2) add new item stats
+		try {
+			await CharacterService.equipItem(newItem);
+		} catch (e) {
+			console.error('Failed to buff character stats', e);
+		}
+
+		// 3) persist the new equip slot in AsyncStorage & UI
+		const key = `equipped_${cat.toLowerCase()}`;
+		await AsyncStorage.setItem(key, JSON.stringify(newItem.toJSON()));
+		setEquipped(prev => ({ ...prev, [cat]: newItem }));
+		showBanner(`${newItem.name} equipped`);
 	};
 
 	const toggleExpand = itemId => {
@@ -132,13 +140,7 @@ export default function InventoryScreen() {
 					activeOpacity={0.7}
 				>
 					<Text style={styles.itemText}>
-						{item.name}{' '}
-						<Text style={[styles.rarityText, { color: rarityColors[item.rarity] }]}>
-							({capitalize(item.rarity)})
-						</Text>{' '}
-						<Text style={[styles.rarityText, { color: '#FFF' }]}>
-							(Quality {item.quality})
-						</Text>
+						{item.name}
 					</Text>
 				</TouchableOpacity>
 				{isOpen && (
@@ -171,13 +173,7 @@ export default function InventoryScreen() {
 					activeOpacity={0.7}
 				>
 					<Text style={styles.itemText}>
-						{item.name}{' '}
-						<Text style={[styles.rarityText, { color: rarityColors[item.rarity] }]}>
-							({capitalize(item.rarity)})
-						</Text>{' '}
-						<Text style={[styles.rarityText, { color: '#FFF' }]}>
-							(Quality {item.quality})
-						</Text>
+						{item.name}
 					</Text>
 				</TouchableOpacity>
 				{isOpen && (
@@ -224,12 +220,6 @@ export default function InventoryScreen() {
 						renderSectionHeader={({ section: { title, data } }) =>
 							data.length > 0 && (
 								<View style={styles.sectionHeaderContainer}>
-									<MaterialCommunityIcons
-										name={sectionIcons[title]}
-										size={20}
-										color={colors.primary}
-										style={styles.sectionIcon}
-									/>
 									<Text style={styles.sectionHeader}>{title}</Text>
 								</View>
 							)
@@ -245,12 +235,6 @@ export default function InventoryScreen() {
 						renderSectionHeader={({ section: { title, data } }) =>
 							data.length > 0 && (
 								<View style={styles.sectionHeaderContainer}>
-									<MaterialCommunityIcons
-										name={sectionIcons[title]}
-										size={20}
-										color={colors.primary}
-										style={styles.sectionIcon}
-									/>
 									<Text style={styles.sectionHeader}>{title}</Text>
 								</View>
 							)

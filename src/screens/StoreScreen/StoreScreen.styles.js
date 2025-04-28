@@ -76,8 +76,7 @@ export default StyleSheet.create({
 
 	itemText: {
 		fontSize: 16,
-		fontWeight: '500',
-		color: colors.text,
+		fontWeight: '600',
 	},
 
 	statsContainer: {

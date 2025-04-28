@@ -29,7 +29,7 @@ export default function BattleLogScreen({ route, navigation }) {
 	} = entry;
 
 	return (
-		<ScreenLayout title={`Battle Log`}>
+		<ScreenLayout title={`Battle ${logIndex + 1} Log`}>
 			<SafeAreaView style={styles.container}>
 				{/* Battle metadata */}
 				<View style={styles.metaSection}>

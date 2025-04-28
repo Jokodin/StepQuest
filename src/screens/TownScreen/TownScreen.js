@@ -32,9 +32,6 @@ export default function TownScreen({ navigation }) {
 	const [nextAttackIn, setNextAttackIn] = useState(
 		() => TownDefenseService.getNextAttackCountdown()
 	);
-	const [percent, setPercent] = useState(
-		() => Math.round(TownDefenseService.getDefenseChance())
-	);
 	const [monsters, setMonsters] = useState(
 		() => TownDefenseService.getNextAttackMonsters()
 	);
@@ -55,7 +52,6 @@ export default function TownScreen({ navigation }) {
 	useEffect(() => {
 		function refresh() {
 			setThreatLevel(Math.max(1, TownDefenseService.getThreatLevel()));
-			setPercent(Math.round(TownDefenseService.getDefenseChance()));
 			setMonsters(TownDefenseService.getNextAttackMonsters());
 			const history = TownDefenseService.getHistory() || [];
 			setLogs(history.slice(0, 10));

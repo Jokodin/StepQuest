@@ -19,4 +19,9 @@ export const colors = {
 	// status
 	success: '#4CAF50',
 	error: '#CF6679',
+
+	// rarity
+	common: '#FFFFFF',
+	uncommon: '#0096FF',
+	rare: '#FFD700'
 };

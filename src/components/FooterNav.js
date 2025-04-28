@@ -15,6 +15,7 @@ const tabs = [
 	{ name: 'Character', icon: '👤' },
 	{ name: 'Items', icon: '🎒' },
 	{ name: 'Store', icon: '🛒' },
+	{ name: 'Logs', icon: '📜' },
 ];
 
 export default function FooterNav() {

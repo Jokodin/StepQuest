@@ -4,22 +4,18 @@ import CharacterService from '@/services/CharacterService';
 import BattleService from '@/services/BattleService';
 
 class TownDefenseService {
-	constructor({ attackIntervalMs = 10 * 1000 } = {}) {
+	constructor({ attackIntervalMs = 60 * 1000 } = {}) {
 		this.attackIntervalMs = attackIntervalMs;
 		this.attackTimer = null;
 		this.listeners = {};
 
-		// internal state
-		this.townLevel = 1;
-		this.history = [];
-		this._nextAttackTime = Date.now() + attackIntervalMs;
 		this.threatLevel = 5;
-
-		// prepare the first incoming monsters
+		this.history = [];
+		// track when the last attack actually occurred
+		this.lastAttackTime = Date.now();
 		this._generateNextAttackMonsters();
 	}
 
-	// subscribe / unsubscribe
 	on(event, fn) {
 		if (!this.listeners[event]) this.listeners[event] = new Set();
 		this.listeners[event].add(fn);
@@ -33,76 +29,101 @@ class TownDefenseService {
 		});
 	}
 
-	// start/stop attack loop
 	startAttacks() {
 		this.stopAttacks();
+		this.lastAttackTime = Date.now();
 		this._generateNextAttackMonsters();
 		this._scheduleNext();
 	}
+
 	stopAttacks() {
-		if (this.attackTimer) clearTimeout(this.attackTimer);
+		clearTimeout(this.attackTimer);
 		this.attackTimer = null;
 	}
 
 	_scheduleNext() {
-		const delay = Math.max(0, this._nextAttackTime - Date.now());
-		this.attackTimer = setTimeout(() => this._launchAttack(), delay);
+		clearTimeout(this.attackTimer);
+		const nextDue = this.lastAttackTime + this.attackIntervalMs;
+		const delay = Math.max(0, nextDue - Date.now());
+		this.attackTimer = setTimeout(() => this._runSingleAttack(false), delay);
 	}
 
-	_launchAttack() {
-		// 1) Prepare player
-		const heroChar = CharacterService.getCurrentCharacter();
-		const player = {
-			name: heroChar.name,
-			hp: heroChar.stats.hp,
-			attackPower: heroChar.stats.attackPower,
-			speed: heroChar.stats.speed,
-		};
+	async processMissedAttacks() {
+		// clear any in-flight timer
+		this.stopAttacks();
 
-		// 2) Build monster list from the last-generated desc
-		const desc = this._pendingMonstersDesc;
-		const [countStr, ...typeParts] = desc.split(' ');
-		const count = parseInt(countStr, 10) || this.threatLevel;
-		let type = typeParts.join(' ');
+		const now = Date.now();
+		const interval = this.attackIntervalMs;
+		// how many intervals have passed since lastAttackTime?
+		let missed = Math.floor((now - this.lastAttackTime) / interval);
+		if (missed < 0) missed = 0;
+
+		// run each missed attack with its scheduled timestamp
+		for (let i = 0; i < missed; i++) {
+			const scheduledTime = this.lastAttackTime + interval;
+			await this._runSingleAttack(true, scheduledTime);
+			this.lastAttackTime += interval;
+		}
+
+		// finally, schedule one timer for the next real attack
+		this._scheduleNext();
+	}
+
+	/**
+	 * Run one attack.  If scheduledTime is provided, use it for the log timestamp;
+	 * otherwise (normal mode) use actual now.
+	 * @param {boolean} isCatchUp  whether we're in catch-up mode
+	 * @param {number} [scheduledTime]  millis when this attack was due
+	 */
+	async _runSingleAttack(isCatchUp, scheduledTime) {
+		const hero = CharacterService.getCurrentCharacter();
+
+		// build monster list
+		const parts = this._pendingMonstersDesc.split(' ');
+		const count = parseInt(parts[0], 10) || this.threatLevel;
+		let type = parts.slice(1).join(' ');
 		if (type.endsWith('s')) type = type.slice(0, -1);
 		const monsters = Array.from({ length: count }, (_, i) => ({
 			id: `${type} #${i + 1}`, level: 1
 		}));
 
-		// 3) Simulate the fight
-		const { logs, success } = BattleService.simulateBattle(player, monsters);
+		// simulate
+		const { logs, success } = await BattleService.simulateBattle(
+			hero,  // now passing full heroChar
+			monsters
+		);
 
-		// 4) Adjust threat/gold
-		if (success) this.threatLevel = Math.min(10, this.threatLevel + 1);
-		else this.threatLevel = Math.max(1, this.threatLevel - 1);
+		// adjust threat
+		this.threatLevel = success
+			? Math.min(10, this.threatLevel + 1)
+			: Math.max(1, this.threatLevel - 1);
 
-		// 5) Record timestamp & history
-		const hhmm = new Date().toLocaleTimeString([], {
+		// choose the correct timestamp
+		const timestamp = scheduledTime != null ? scheduledTime : Date.now();
+		const timeLabel = new Date(timestamp).toLocaleTimeString([], {
 			hour: '2-digit', minute: '2-digit'
 		});
+
+		// record
 		this.history.unshift({
-			time: hhmm,
+			time: timeLabel,
 			event: success ? 'Defended Attack' : 'Town Fell',
 			success,
-			hero: heroChar.name,
+			hero: hero.name,
 			monsters: monsters.map(m => m.id),
 			logs,
 		});
 		if (this.history.length > 50) this.history.pop();
 
-		// 6) Schedule next attack *before* emitting
-		this._nextAttackTime = Date.now() + this.attackIntervalMs;
-		this._generateNextAttackMonsters();
-		this.emit('attack', { success });
-		this._scheduleNext();
-	}
+		// emit
+		this.emit('attack', { success, logs });
 
-	_computeDefenseChance() {
-		return 0;
-	}
-
-	_rewardOnSuccess() {
-		return 0;
+		// schedule next if not catch-up
+		if (!isCatchUp) {
+			this.lastAttackTime = Date.now();
+			this._generateNextAttackMonsters();
+			this._scheduleNext();
+		}
 	}
 
 	_generateNextAttackMonsters() {
@@ -114,13 +135,11 @@ class TownDefenseService {
 
 	// Public API
 	getThreatLevel() { return this.threatLevel; }
-	getDefenseChance() { return this._computeDefenseChance(); }
 	getNextAttackCountdown() {
-		const secs = (this._nextAttackTime - Date.now()) / 1000;
-		return Math.floor(Math.max(0, secs));
+		const nextDue = this.lastAttackTime + this.attackIntervalMs;
+		return Math.max(0, Math.floor((nextDue - Date.now()) / 1000));
 	}
 	getHistory() { return this.history; }
-	getTownLevel() { return this.townLevel; }
 	getNextAttackMonsters() { return this._pendingMonstersDesc; }
 	levelUp() { this.townLevel += 1; }
 }
