@@ -15,133 +15,95 @@ import styles from './InventoryScreen.styles';
 import { colors } from '@/constants/theme';
 import ScreenLayout from '@/components/ScreenLayout';
 import Item from '@/models/Item';
-import CharacterService from '@/services/CharacterService';
 import { categories } from '@/services/ItemService';
-
-const rarityRank = { rare: 0, uncommon: 1, common: 2 };
-const rarityColors = {
-	common: '#FFFFFF',
-	uncommon: '#0096FF',
-	rare: '#FFD700',
-};
-function capitalize(str) {
-	return str.charAt(0).toUpperCase() + str.slice(1);
-}
 
 export default function InventoryScreen() {
 	const isFocused = useIsFocused();
-
 	const [tab, setTab] = useState('Inventory');
-	const [inventory, setInventory] = useState([]);      // Item[]
-	const [equipped, setEquipped] = useState({});        // { [cat]: Item }
+	const [inventory, setInventory] = useState([]);        // all items
+	const [equippedItems, setEquippedItems] = useState([]); // items currently equipped
+	const [expanded, setExpanded] = useState({});          // expansion state per item
 	const [banner, setBanner] = useState('');
-	const [expanded, setExpanded] = useState({});        // { [itemId]: bool }
 
-	// load inventory + equips
+	// Load inventory and equipped items
 	const loadData = useCallback(async () => {
-		// await AsyncStorage.removeItem('inventory');
-		// await AsyncStorage.clear();
 		const invRaw = await AsyncStorage.getItem('inventory');
 		const invArr = invRaw ? JSON.parse(invRaw) : [];
 		setInventory(invArr.map(obj => Item.fromJSON(obj)));
 
-		const eqMap = {};
-		await Promise.all(
-			categories.map(async cat => {
-				const key = `equipped_${cat.toLowerCase()}`;
-				const raw = await AsyncStorage.getItem(key);
-				if (raw) eqMap[cat] = Item.fromJSON(JSON.parse(raw));
-			})
-		);
-		setEquipped(eqMap);
+		const eqRaw = await AsyncStorage.getItem('equipped_items');
+		const eqArr = eqRaw ? JSON.parse(eqRaw) : [];
+		setEquippedItems(eqArr.map(obj => Item.fromJSON(obj)));
 	}, []);
 
 	useEffect(() => {
 		if (isFocused) loadData();
 	}, [isFocused, loadData]);
 
+	// Banner helper
 	const showBanner = msg => {
 		setBanner(msg);
 		setTimeout(() => setBanner(''), 2500);
 	};
 
-	const handleUnequip = async (cat) => {
-		const oldItem = equipped[cat];
-		if (!oldItem) return;
-
-		// 1) remove stat bonuses
-		try {
-			await CharacterService.unequipItem(oldItem);
-		} catch (e) {
-			console.error('Failed to remove character buff', e);
-		}
-
-		// 2) clear UI slot & storage
-		const key = `equipped_${cat.toLowerCase()}`;
-		await AsyncStorage.removeItem(key);
-		setEquipped(prev => ({ ...prev, [cat]: null }));
-		showBanner(`${oldItem.name} unequipped`);
+	// Equip an item (add to equippedItems)
+	const handleEquip = async item => {
+		// add new item
+		const newEquipped = [...equippedItems, item];
+		// persist
+		await AsyncStorage.setItem(
+			'equipped_items',
+			JSON.stringify(newEquipped.map(i => i.toJSON()))
+		);
+		setEquippedItems(newEquipped);
+		showBanner(`${item.name} equipped`);
 	};
 
-	const handleEquip = async (cat, newItem) => {
-		// 1) subtract old item stats (if any)
-		const oldItem = equipped[cat];
-		if (oldItem) {
-			try {
-				await CharacterService.unequipItem(oldItem);
-			} catch (e) {
-				console.error('Failed to remove old item buff', e);
-			}
-		}
-
-		// 2) add new item stats
-		try {
-			await CharacterService.equipItem(newItem);
-		} catch (e) {
-			console.error('Failed to buff character stats', e);
-		}
-
-		// 3) persist the new equip slot in AsyncStorage & UI
-		const key = `equipped_${cat.toLowerCase()}`;
-		await AsyncStorage.setItem(key, JSON.stringify(newItem.toJSON()));
-		setEquipped(prev => ({ ...prev, [cat]: newItem }));
-		showBanner(`${newItem.name} equipped`);
+	// Unequip an item (remove by id)
+	const handleUnequip = async item => {
+		const newEquipped = equippedItems.filter(eq => eq.id !== item.id);
+		await AsyncStorage.setItem(
+			'equipped_items',
+			JSON.stringify(newEquipped.map(i => i.toJSON()))
+		);
+		setEquippedItems(newEquipped);
+		showBanner(`${item.name} unequipped`);
 	};
 
 	const toggleExpand = itemId => {
 		setExpanded(prev => ({ ...prev, [itemId]: !prev[itemId] }));
 	};
 
-	// Inventory sections: filter + sort
+	// Sections for Inventory tab: items not equipped
 	const inventorySections = categories.map(cat => ({
 		title: cat,
 		data: inventory
-			.filter(it => it.category === cat && (!equipped[cat] || equipped[cat].id !== it.id))
+			.filter(
+				it => it.category === cat && !equippedItems.some(eq => eq.id === it.id)
+			)
 			.sort((a, b) => {
-				const r = rarityRank[a.rarity] - rarityRank[b.rarity];
+				// sort by rarity then quality
+				const r = a.rarity.localeCompare(b.rarity);
 				return r !== 0 ? r : b.quality - a.quality;
 			}),
 	}));
 
-	// Equipped sections: one per category
+	// Sections for Equipped tab: grouped by category
 	const equippedSections = categories.map(cat => ({
 		title: cat,
-		data: equipped[cat] ? [equipped[cat]] : [],
+		data: equippedItems.filter(eq => eq.category === cat),
 	}));
 
-	// Inventory row
-	const renderInventoryItem = ({ item, section }) => {
-		const isOpen = !!expanded[item.id];
+	// Render an inventory item row
+	const renderInventoryItem = ({ item }) => {
+		const isOpen = expanded[item.id];
 		return (
 			<View style={styles.itemContainerWrapper}>
 				<TouchableOpacity
 					style={styles.itemContainer}
 					onPress={() => toggleExpand(item.id)}
-					activeOpacity={0.7}
 				>
-					<Text style={styles.itemText}>
-						{item.name}
-					</Text>
+					<Text style={styles.itemText}>{item.name}</Text>
 				</TouchableOpacity>
 				{isOpen && (
 					<View style={styles.statsContainer}>
@@ -151,10 +113,7 @@ export default function InventoryScreen() {
 							</Text>
 						))}
 						<View style={styles.equipButtonContainer}>
-							<Button
-								title="Equip"
-								onPress={() => handleEquip(section.title, item)}
-							/>
+							<Button title="Equip" onPress={() => handleEquip(item)} />
 						</View>
 					</View>
 				)}
@@ -162,19 +121,16 @@ export default function InventoryScreen() {
 		);
 	};
 
-	// Equipped row now expandable
-	const renderEquippedItem = ({ item, section }) => {
-		const isOpen = !!expanded[item.id];
+	// Render an equipped item row
+	const renderEquippedItem = ({ item }) => {
+		const isOpen = expanded[item.id];
 		return (
 			<View style={styles.itemContainerWrapper}>
 				<TouchableOpacity
 					style={styles.itemContainer}
 					onPress={() => toggleExpand(item.id)}
-					activeOpacity={0.7}
 				>
-					<Text style={styles.itemText}>
-						{item.name}
-					</Text>
+					<Text style={styles.itemText}>{item.name}</Text>
 				</TouchableOpacity>
 				{isOpen && (
 					<View style={styles.statsContainer}>
@@ -184,10 +140,7 @@ export default function InventoryScreen() {
 							</Text>
 						))}
 						<View style={styles.equipButtonContainer}>
-							<Button
-								title="Unequip"
-								onPress={() => handleUnequip(section.title)}
-							/>
+							<Button title="Unequip" onPress={() => handleUnequip(item)} />
 						</View>
 					</View>
 				)}

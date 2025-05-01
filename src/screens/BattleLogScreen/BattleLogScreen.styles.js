@@ -24,16 +24,35 @@ export default StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		paddingHorizontal: 16,
-		paddingVertical: 8,
+		paddingVertical: 12,
 		borderBottomWidth: 1,
 		borderColor: colors.border,
+		position: 'relative',
+	},
+	entryRowPlayer: {
+		backgroundColor: colors.primary + '10',
+	},
+	entryRowEnemy: {
+		backgroundColor: colors.error + '10',
+	},
+	entryContent: {
+		flex: 1,
+		flexDirection: 'row',
+		alignItems: 'center',
+		zIndex: 1,
 	},
 	entryIcon: {
-		marginRight: 12,
+		marginHorizontal: 12,
 	},
 	entryText: {
 		flex: 1,
 		fontSize: 16,
 		color: colors.text,
+	},
+	entryTextPlayer: {
+		textAlign: 'left',
+	},
+	entryTextEnemy: {
+		textAlign: 'right',
 	},
 });

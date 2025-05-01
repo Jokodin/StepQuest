@@ -1,67 +1,71 @@
-// src/services/ItemService.js
-
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import Item from '@/models/Item';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
 // Categories list
-export const categories = [
+const categories = [
 	'Weapon',
 	'Shield',
 	'Armor',
-	'Boots',
 	'Gloves',
 	'Helmet',
-	'Jewelry',
-	'Belt',
 ];
 
-// Intrinsic stats generators per category
-const intrinsicStatsGenerators = {
-	Weapon: () => ({ damage: Math.floor(Math.random() * 100) + 1 }),
-	Shield: () => ({ blockChance: Math.floor(Math.random() * 100) + 1 }),
-	Armor: () => ({ armor: Math.floor(Math.random() * 100) + 1 }),
-	Boots: () => ({ stamina: Math.floor(Math.random() * 100) + 1 }),
-	Gloves: () => {
-		const raw = 1 - Math.random();
-		const fixed = Math.ceil(raw * 100) / 100; // yields 0.01 through 1.00
-		return { attackSpeed: fixed };
-	},
-	Helmet: () => ({ armor: Math.floor(Math.random() * 100) + 1 }),
-	Jewelry: () => ({ spellPower: Math.floor(Math.random() * 100) + 1 }),
-	Belt: () => ({ health: Math.floor(Math.random() * 100) + 1 }),
-};
-
-// Rarity and cost settings
+// Rarity levels and cost settings
 const rarityLevels = ['common', 'uncommon', 'rare'];
 const costMultipliers = { common: 1, uncommon: 2, rare: 3 };
 const BASE_PRICE = 1000;
 
-// Stat pools and ranges
+// Stat pools and ranges for random stats
 const statsPool = {
-	Weapons: ['attackPower', 'attackSpeed', 'critChance', 'accuracy'],
-	Shields: ['defense'],
-	Armors: ['defense', 'health'],
-	Boots: ['attackSpeed', 'stamina'],
-	Gloves: ['critChance', 'attackSpeed'],
-	Helmets: ['health', 'defense'],
-	Jewelry: ['mana'],
-	Belts: ['health', 'stamina', 'defense'],
+	Weapon: ['damage', 'attackPower'],
+	Shield: ['blockChance', 'armor'],
+	Armor: ['armor', 'health'],
+	Gloves: ['attackSpeed'],
+	Helmet: ['health', 'armor'],
 };
+
 const statRanges = {
-	attackPower: [5, 15],
-	attackSpeed: [1, 3],
-	critChance: [1, 5],
-	accuracy: [1, 100],
-	defense: [5, 20],
-	health: [20, 50],
-	mana: [10, 30],
-	stamina: [10, 30],
+	damage: [1, 3],
+	attackPower: [0.1, 1],
+	attackSpeed: [0.1, 1],
+	armor: [1, 2],
+	health: [10, 20],
+	blockChance: [1, 3],
+};
+
+// Intrinsic stats generators per category (now using statRanges)
+const intrinsicStatsGenerators = {
+	Weapon: () => {
+		const [min, max] = statRanges.damage;
+		const val = Math.floor(Math.random() * (max - min + 1)) + min;
+		return { damage: val };
+	},
+	Shield: () => {
+		const [min, max] = statRanges.blockChance;
+		const val = Math.floor(Math.random() * (max - min + 1)) + min;
+		return { blockChance: val };
+	},
+	Armor: () => {
+		const [min, max] = statRanges.armor;
+		const val = Math.floor(Math.random() * (max - min + 1)) + min;
+		return { armor: val };
+	},
+	Gloves: () => {
+		const [min, max] = statRanges.attackSpeed;
+		const raw = Math.random() * (max - min) + min;
+		const fixed = Math.round(raw * 100) / 100;
+		return { attackSpeed: fixed };
+	},
+	Helmet: () => {
+		const [min, max] = statRanges.armor;
+		const val = Math.floor(Math.random() * (max - min + 1)) + min;
+		return { armor: val };
+	},
 };
 
 /**
- * Roll one random stat (quality-agnostic) for a given category.
+ * Roll one random stat for a given category.
  */
 function rollRandomStat(category) {
 	const pool = [...(statsPool[category] || [])];
@@ -75,77 +79,66 @@ function rollRandomStat(category) {
 /**
  * Build the human-readable item name.
  */
-export function formatName(rarity, category) {
+function formatName(rarity, category) {
 	const cap = rarity.charAt(0).toUpperCase() + rarity.slice(1);
 	return `${cap} ${category}`;
 }
 
 /**
- * Load (or generate & persist) the store sections.
- * @returns {Promise<Array<{ title: string, data: Item[] }>>}
+ * Pick a rarity based on item level.
+ * Each level gives a 10% chance to upgrade rarity, and upgrades can stack.
  */
-export async function getStoreSections() {
-	const STORAGE_KEY = 'store_items';
-	const raw = await AsyncStorage.getItem(STORAGE_KEY);
+function pickRarityByLevel(itemLevel) {
+	const maxIndex = rarityLevels.length - 1;
+	const upgradeChance = Math.min(0.1 * itemLevel, 1);
+	let index = 0;
+	while (index < maxIndex && Math.random() < upgradeChance) {
+		index++;
+	}
+	return rarityLevels[index];
+}
 
-	let sections;
-	if (raw) {
-		// parse & rehydrate Items
-		const parsed = JSON.parse(raw);
-		sections = parsed.map(sec => ({
-			title: sec.title,
-			data: sec.data.map(obj => {
-				const it = Item.fromJSON(obj);
-				it.cost = obj.cost;
-				return it;
-			}),
-		}));
-	} else {
-		// first‐time: generate fresh sections
-		sections = categories.map(category => ({
-			title: category,
-			data: rarityLevels.map(rarity => {
-				const cost = BASE_PRICE * costMultipliers[rarity];
-				const intrinsic = intrinsicStatsGenerators[category]
-					? intrinsicStatsGenerators[category]()
-					: {};
+/**
+ * Generate a random item for a given item level.
+ * @param {number} itemLevel - The level influencing rarity upgrade rolls.
+ * @returns {Item}
+ */
+export function generateItemByLevel(itemLevel) {
+	const category = categories[Math.floor(Math.random() * categories.length)];
+	const rarity = pickRarityByLevel(itemLevel);
+	const cost = BASE_PRICE * costMultipliers[rarity];
 
-				let additional = {};
-				switch (rarity) {
-					case 'uncommon':
-						additional = rollRandomStat(category);
-						break;
-					case 'rare':
-						additional = {
-							...rollRandomStat(category),
-							...rollRandomStat(category),
-						};
-						break;
-					default:
-						additional = {};
-				}
+	const intrinsic = intrinsicStatsGenerators[category]
+		? intrinsicStatsGenerators[category]()
+		: {};
 
-				const stats = { ...intrinsic, ...additional };
-				const item = new Item({
-					id: uuidv4(),
-					name: formatName(rarity, category), // name is formatted in UI via formatName()
-					category,
-					rarity,
-					quality: 0,
-					stats,
-				});
-				item.cost = cost;
-				return item;
-			}),
-		}));
-
-		// persist for next time
-		const serial = sections.map(sec => ({
-			title: sec.title,
-			data: sec.data.map(i => ({ ...i.toJSON(), cost: i.cost })),
-		}));
-		await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(serial));
+	let additional = {};
+	if (rarity === 'uncommon') {
+		additional = rollRandomStat(category);
+	} else if (rarity === 'rare') {
+		additional = { ...rollRandomStat(category), ...rollRandomStat(category) };
 	}
 
-	return sections;
+	const stats = { ...intrinsic, ...additional };
+	const item = new Item({
+		id: uuidv4(),
+		name: formatName(rarity, category),
+		category,
+		rarity,
+		quality: 0,
+		stats,
+	});
+	item.cost = cost;
+	return item;
 }
+
+export {
+	categories,
+	rarityLevels,
+	costMultipliers,
+	BASE_PRICE,
+	intrinsicStatsGenerators,
+	rollRandomStat,
+	formatName,
+	pickRarityByLevel,
+};

@@ -1,113 +1,232 @@
-// src/services/WalkRewardService.js
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CharacterService from '@/services/CharacterService';
 import BattleService from '@/services/BattleService';
 import { StepServiceInstance } from '@/services/StepService';
 
-const STEP_KEY = 'walk_total_steps';
 const LOGS_KEY = 'walk_battle_logs';
-const STEP_THRESHOLD = 10;
+const BOXES_KEY = 'walk_reward_boxes';
+const AREA_KEY = 'walk_current_area';
+const LAST_STEPS_KEY = 'walk_last_steps';
+const STEP_THRESHOLD = 5;
+export const BOSS_THRESHOLD = 20;
 const MAX_LOG_ENTRIES = 50;
+
+// Define themed monster lists per area
+const areaThemes = {
+	1: ['Skeleton', 'Ghoul', 'Zombie', 'Wraith', 'Vampire'],
+	2: ['Slime', 'Blob', 'Ooze', 'Gelatinous Cube', 'Sludge'],
+	3: ['Wolf', 'Bear', 'Tiger', 'Panther', 'Lion'],
+};
+
+// Thematic names for each area
+export const areaNames = {
+	1: 'Crypt of the Damned',
+	2: 'Slime Bog',
+	3: 'Beastwood Forest',
+};
 
 class WalkRewardService {
 	constructor() {
-		console.log('[WalkRewardService] ctor');
-		this.totalSteps = 0;
+		console.log("ctor");
 		this.logs = [];
 		this.listeners = new Set();
+		this.currentArea = 1;
+		this.stepsInArea = 0;
+		this.lastLifetimeSteps = 0;
+		this.isInitialized = false;
 
-		// initialize persisted state
 		this._init();
-
-		// subscribe to daily step updates
-		StepServiceInstance.on('update', ({ today }) => {
-			this.processSteps(today);
-		});
+		this._onStepUpdate = this._onStepUpdate.bind(this);
+		StepServiceInstance.on('update', this._onStepUpdate);
 	}
 
 	async _init() {
-		// load stored totalSteps
-		const storedSteps = await AsyncStorage.getItem(STEP_KEY);
-		this.totalSteps = storedSteps ? parseInt(storedSteps, 10) : 0;
-
-		// load stored logs
+		console.log('[WalkRewardService] Initializing');
 		const rawLogs = await AsyncStorage.getItem(LOGS_KEY);
+		console.log('[WalkRewardService] Raw logs from storage:', rawLogs);
 		this.logs = rawLogs ? JSON.parse(rawLogs) : [];
+		console.log('[WalkRewardService] Parsed logs:', this.logs);
+
+		if (!(await AsyncStorage.getItem(BOXES_KEY))) {
+			await AsyncStorage.setItem(BOXES_KEY, JSON.stringify([]));
+		}
+
+		const rawArea = await AsyncStorage.getItem(AREA_KEY);
+		this.currentArea = rawArea ? +rawArea : 1;
+
+		// Wait for StepService to be ready
+		await new Promise(resolve => {
+			let attempts = 0;
+			const maxAttempts = 10; // 5 seconds total
+			const interval = 500; // Check every 500ms
+
+			const check = () => {
+				const lifetime = StepServiceInstance.getLifetime();
+				console.log('[WalkRewardService] Checking StepService lifetime:', lifetime);
+
+				// Initialize with whatever value we get, even if it's 0
+				this.lastLifetimeSteps = lifetime;
+				this.isInitialized = true;
+				resolve();
+			};
+
+			// Start checking
+			check();
+		});
+
+		await AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
 		this._emitUpdate();
-
-		// process any thresholds already passed
-		this.processSteps(StepServiceInstance.getToday());
 	}
 
-	onUpdate(fn) {
-		this.listeners.add(fn);
-	}
-	offUpdate(fn) {
-		this.listeners.delete(fn);
-	}
-	_emitUpdate() {
-		for (const fn of this.listeners) {
-			try { fn(this.logs); } catch { }
+	// Call this when app becomes active
+	async startSession() {
+		console.log('[WalkRewardService] Starting session');
+		if (!this.isInitialized) {
+			console.log('[WalkRewardService] Not initialized yet, waiting...');
+			return;
+		}
+
+		const currentLifetimeSteps = StepServiceInstance.getLifetime();
+		const newSteps = currentLifetimeSteps - this.lastLifetimeSteps;
+
+		if (newSteps > 0) {
+			console.log(`[WalkRewardService] Processing ${newSteps} new steps since last check`);
+			await this.processSteps(newSteps);
+		} else {
+			console.log('[WalkRewardService] No new steps to process');
 		}
 	}
 
-	async processSteps(newTotalSteps) {
-		console.log('[WalkRewardService] processSteps(', newTotalSteps, ')');
+	// Call this when app becomes inactive
+	endSession() {
+		console.log('[WalkRewardService] Ending session');
+		if (!this.isInitialized) return;
 
-		const oldCount = Math.floor(this.totalSteps / STEP_THRESHOLD);
-		const newCount = Math.floor(newTotalSteps / STEP_THRESHOLD);
-		const toTrigger = newCount - oldCount;
-		console.log("old = ", oldCount, ", new = ", newCount, ", toTrigger = ", toTrigger);
-
-		// always persist updated totalSteps
-		this.totalSteps = newTotalSteps;
-		await AsyncStorage.setItem(STEP_KEY, String(this.totalSteps));
-
-		if (toTrigger > 0) {
-			for (let i = 0; i < toTrigger; i++) {
-				// calculate the exact step count this battle corresponds to:
-				const stepCountAtTrigger = (oldCount + i + 1) * STEP_THRESHOLD;
-				await this._triggerBattle(stepCountAtTrigger);
-			}
-			this._emitUpdate();
-		}
+		this.lastLifetimeSteps = StepServiceInstance.getLifetime();
+		AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
 	}
 
-	async _triggerBattle(stepCountAtTrigger) {
-		try {
-			// prepare hero and random monsters
-			const hero = CharacterService.getCurrentCharacter();
-			const types = ['Goblin', 'Orc', 'Skeleton', 'Troll', 'Bandit'];
-			const type = types[Math.floor(Math.random() * types.length)];
-			const count = Math.floor(Math.random() * 3) + 1;
-			const monsters = Array.from({ length: count }, (_, i) => ({
-				id: `${type} #${i + 1}`, level: 1
-			}));
+	async processSteps(newSteps) {
+		if (!this.isInitialized) return;
 
-			// run the battle
-			const { logs, success } = await BattleService.simulateBattle(hero, monsters);
+		console.log(`[WalkRewardService] Processing ${newSteps} new steps (current area steps: ${this.stepsInArea})`);
+		if (newSteps < STEP_THRESHOLD) {
+			console.log('[WalkRewardService] Not enough steps for a battle');
+			return;
+		}
 
-			// record
-			this.logs.unshift({
-				stepCount: stepCountAtTrigger,       // record the total steps at this trigger
-				success,
-				monsters: monsters.map(m => m.id),
-				logs
-			});
+		// Process battles one at a time until we run out of steps
+		while (newSteps >= STEP_THRESHOLD) {
+			this.stepsInArea += STEP_THRESHOLD;
+			const isBoss = this.stepsInArea >= BOSS_THRESHOLD && (this.stepsInArea - STEP_THRESHOLD) < BOSS_THRESHOLD;
 
-			if (this.logs.length > MAX_LOG_ENTRIES) {
-				this.logs.length = MAX_LOG_ENTRIES;
-			}
+			console.log(`[WalkRewardService] Triggering battle at ${this.stepsInArea} steps (${isBoss ? 'BOSS' : 'regular'})`);
+			const battleLog = await this._runBattle(this.stepsInArea, isBoss);
+			this.logs = [battleLog, ...this.logs].slice(0, MAX_LOG_ENTRIES);
+			console.log('[WalkRewardService] Updated logs:', this.logs);
 			await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(this.logs));
-		} catch (e) {
-			console.log(e);
+
+			newSteps -= STEP_THRESHOLD;
+
+			if (!battleLog.success) {
+				// On any battle loss, reset area progress
+				console.log('[WalkRewardService] Battle lost, resetting area progress');
+				this.stepsInArea = 0;
+			} else if (isBoss) {
+				// On boss victory, move to next area
+				console.log('[WalkRewardService] Boss defeated, moving to next area');
+				this.stepsInArea = 0;
+			}
 		}
+
+		this._emitUpdate();
+	}
+
+	async _onStepUpdate({ lifetime }) {
+		if (!this.isInitialized) return;
+
+		const newSteps = lifetime - this.lastLifetimeSteps;
+		if (newSteps <= 0) {
+			console.log('[WalkRewardService] No new steps to process');
+			return;
+		}
+
+		console.log(`[WalkRewardService] Received ${newSteps} new steps`);
+		await this.processSteps(newSteps);
+		this.lastLifetimeSteps = lifetime;
+		await AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
+	}
+
+	async _runBattle(stepCountAtTrigger, isBoss) {
+		console.log(`[WalkRewardService] Running ${isBoss ? 'boss' : 'regular'} battle in area ${this.currentArea}`);
+		const hero = CharacterService.getCurrentCharacter();
+		let monsters;
+		if (isBoss) {
+			monsters = [{ id: `Boss of ${this.getCurrentAreaName()}`, level: this.currentArea * 5 }];
+		} else {
+			const themeList = areaThemes[this.currentArea] || [];
+			const count = themeList.length;
+			const baseLevel = (this.currentArea - 1) * count;
+			const idx = Math.floor(Math.random() * count);
+			const type = themeList[idx];
+			const level = baseLevel + idx + 1;
+			monsters = [{ id: type, level }];
+		}
+
+		const { logs, success } = await BattleService.simulateBattle(hero, monsters);
+		console.log(`[WalkRewardService] Battle ${success ? 'won' : 'lost'} against ${monsters.map(m => m.id).join(', ')}`);
+
+		const entry = {
+			area: this.currentArea,
+			areaName: this.getCurrentAreaName(),
+			stepCount: stepCountAtTrigger,
+			success,
+			monsters: monsters.map(m => m.id),
+			logs,
+			isBoss,
+		};
+
+		console.log('[WalkRewardService] Created battle entry:', entry);
+
+		if (success) {
+			const rawBoxes = await AsyncStorage.getItem(BOXES_KEY);
+			const boxes = rawBoxes ? JSON.parse(rawBoxes) : [];
+			boxes.push({ earnedAt: Date.now(), area: this.currentArea });
+			await AsyncStorage.setItem(BOXES_KEY, JSON.stringify(boxes));
+
+			if (isBoss) {
+				this.currentArea++;
+				await AsyncStorage.setItem(AREA_KEY, String(this.currentArea));
+				console.log('[WalkRewardService] Boss defeated, moving to area', this.currentArea);
+			}
+		}
+
+		return entry;
+	}
+
+	getCurrentAreaName() {
+		return areaNames[this.currentArea] || `Area ${this.currentArea}`;
 	}
 
 	getHistory() {
 		return this.logs;
 	}
+
+	async reset() {
+		console.log('[WalkRewardService] Resetting service');
+		this.logs = [];
+		await AsyncStorage.removeItem(LOGS_KEY);
+		this.currentArea = 1;
+		this.stepsInArea = 0;
+		this.lastLifetimeSteps = StepServiceInstance.getLifetime();
+		await AsyncStorage.removeItem(AREA_KEY);
+		await AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
+		this._emitUpdate();
+	}
+
+	onUpdate(fn) { this.listeners.add(fn); }
+	offUpdate(fn) { this.listeners.delete(fn); }
+	_emitUpdate() { this.listeners.forEach(fn => fn(this.logs)); }
 }
 
 export default new WalkRewardService();

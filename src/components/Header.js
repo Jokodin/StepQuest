@@ -1,5 +1,3 @@
-// components/Header.js
-
 import React, { useState, useEffect, useCallback } from 'react';
 import {
 	View,
@@ -8,73 +6,101 @@ import {
 	TouchableOpacity,
 	Alert,
 } from 'react-native';
-import { useNavigation, useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { colors } from '@/constants/theme';
 import { StepServiceInstance } from '@/services/StepService';
+import WalkRewardService from '@/services/WalkRewardService';
 
-export default function Header({ title }) {
-	const navigation = useNavigation();
+export default function Header() {
 	const focused = useIsFocused();
 
-	const [gold, setGold] = useState(0);
-	const [todaySteps, setTodaySteps] = useState(0);
+	const [displaySteps, setDisplaySteps] = useState(0);
+	const [installSteps, setInstallSteps] = useState(0);
+	const [installDate, setInstallDate] = useState('');
+	const [initialized, setInitialized] = useState(false);
 
-	// load gold whenever the screen comes into focus
-	useEffect(() => {
-		if (focused) {
-			AsyncStorage.getItem('gold').then(value => {
-				setGold(value ? parseInt(value, 10) : 0);
-			});
-			// also refresh today's steps
-			setTodaySteps(StepServiceInstance.getToday());
-		}
-	}, [focused]);
+	const getTodayDate = () => new Date().toISOString().slice(0, 10);
 
-	// subscribe to step updates
+	// Load or create baseline on mount
 	useEffect(() => {
-		const handleStepUpdate = ({ today }) => {
-			setTodaySteps(today);
-		};
-		StepServiceInstance.on('update', handleStepUpdate);
-		return () => {
-			StepServiceInstance.off('update', handleStepUpdate);
-		};
+		(async () => {
+			const today = StepServiceInstance.getToday();
+			const todayStr = getTodayDate();
+
+			const savedDate = await AsyncStorage.getItem('install_date');
+			const savedSteps = await AsyncStorage.getItem('install_steps');
+
+			if (savedDate && savedSteps) {
+				// restore baseline
+				setInstallDate(savedDate);
+				setInstallSteps(Number(savedSteps));
+				setInitialized(true);
+
+				const delta =
+					savedDate === todayStr
+						? today - Number(savedSteps)
+						: today;
+				setDisplaySteps(delta >= 0 ? delta : today);
+			} else {
+				// first‐time baseline
+				setInstallDate(todayStr);
+				setInstallSteps(today);
+				await AsyncStorage.setItem('install_date', todayStr);
+				await AsyncStorage.setItem('install_steps', String(today));
+				setInitialized(true);
+				setDisplaySteps(0);
+			}
+		})();
 	}, []);
 
-	// handler to add 1000 gold
-	const handleAddGold = useCallback(async () => {
-		try {
-			const value = await AsyncStorage.getItem('gold');
-			const current = value ? parseInt(value, 10) : 0;
-			const updated = current + 1000;
-			await AsyncStorage.setItem('gold', updated.toString());
-			setGold(updated);
-		} catch (e) {
-			console.error('Failed to add gold', e);
-		}
-	}, []);
+	// Update displaySteps on every native step update
+	useEffect(() => {
+		if (!initialized) return;
+		const onUpdate = ({ today }) => {
+			const todayStr = getTodayDate();
+			const delta =
+				installDate === todayStr
+					? today - installSteps
+					: today;
+			setDisplaySteps(delta >= 0 ? delta : today);
+		};
 
-	// handler to clear ALL AsyncStorage
+		StepServiceInstance.on('update', onUpdate);
+		return () => StepServiceInstance.off('update', onUpdate);
+	}, [initialized, installDate, installSteps]);
+
+	// Recompute when screen refocuses
+	useEffect(() => {
+		if (focused && initialized) {
+			const today = StepServiceInstance.getToday();
+			const todayStr = getTodayDate();
+			const delta =
+				installDate === todayStr
+					? today - installSteps
+					: today;
+			setDisplaySteps(delta >= 0 ? delta : today);
+		}
+	}, [focused, initialized, installDate, installSteps]);
+
 	const handleReset = useCallback(() => {
 		Alert.alert(
 			'Confirm Reset',
-			'This will clear all saved data. Proceed?',
+			'This will clear all saved data and reset your progress. Proceed?',
 			[
 				{ text: 'Cancel', style: 'cancel' },
 				{
 					text: 'Reset',
 					style: 'destructive',
 					onPress: async () => {
-						try {
-							await AsyncStorage.clear();
-							setGold(0);
-							setTodaySteps(0);
-							Alert.alert('Reset complete', 'All data has been cleared.');
-						} catch (e) {
-							console.error('Failed to reset storage', e);
-							Alert.alert('Error', 'Could not reset storage.');
-						}
+						await AsyncStorage.clear();
+						await WalkRewardService.reset();
+						await StepServiceInstance.reset();
+						setDisplaySteps(0);
+						setInstallSteps(0);
+						setInstallDate('');
+						setInitialized(false);
+						Alert.alert('Reset complete', 'All data has been cleared.');
 					},
 				},
 			]
@@ -83,11 +109,14 @@ export default function Header({ title }) {
 
 	return (
 		<View style={styles.header}>
-			<Text style={styles.stepText}>🚶{todaySteps}</Text>
-			<TouchableOpacity onPress={handleAddGold} hitSlop={8}>
-				<Text style={styles.goldText}>💰{gold}</Text>
-			</TouchableOpacity>
-			<TouchableOpacity onPress={handleReset} hitSlop={8} style={styles.resetButton}>
+			<Text style={styles.stepText}>
+				Steps today: {displaySteps}
+			</Text>
+			<TouchableOpacity
+				onPress={handleReset}
+				hitSlop={8}
+				style={styles.resetButton}
+			>
 				<Text style={styles.resetText}>Reset</Text>
 			</TouchableOpacity>
 		</View>
@@ -109,10 +138,7 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: colors.text,
 		marginRight: 16,
-	},
-	goldText: {
-		fontSize: 16,
-		color: colors.text,
+		textAlign: 'center',
 	},
 	resetButton: {
 		marginLeft: 16,

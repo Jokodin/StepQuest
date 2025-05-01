@@ -79,7 +79,6 @@ class GoogleFitService {
 
 	// 3️⃣ Continuous updates via the recorder API
 	async startStepUpdates(onStepCount) {
-		console.log("start step updates");
 		if (!(await this.authorize())) return;
 
 		// startRecording gives you back status info, not just errors

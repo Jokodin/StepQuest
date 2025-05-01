@@ -23,18 +23,50 @@ export default function StoreScreen() {
 	const [gold, setGold] = useState(0);
 	const [sections, setSections] = useState(null);
 	const [expanded, setExpanded] = useState({});
+	const [timer, setTimer] = useState(3600);
 
-	// 1) Load store sections from ItemService
+	// Refresh store: only common items per category, every 10s
 	useEffect(() => {
-		getStoreSections().then(data => setSections(data));
+		let isMounted = true;
+		const loadSections = async () => {
+			try {
+				// Clear persisted store to force regeneration
+				await AsyncStorage.removeItem('store_items');
+				const all = await getStoreSections();
+				const commonOnly = all.map(({ title, data }) => ({
+					title,
+					data,
+				}));
+				if (isMounted) {
+					setSections(commonOnly);
+					setTimer(3600);
+				}
+			} catch (err) {
+				console.error('Failed to load store sections', err);
+			}
+		};
+		loadSections();
+		const intervalId = setInterval(loadSections, 10000);
+		return () => {
+			isMounted = false;
+			clearInterval(intervalId);
+		};
 	}, []);
 
-	// 2) Load gold from storage
+	// Countdown timer
+	useEffect(() => {
+		const tick = setInterval(() => {
+			setTimer(prev => (prev > 0 ? prev - 1 : 0));
+		}, 1000);
+		return () => clearInterval(tick);
+	}, []);
+
+	// Load gold from storage
 	useEffect(() => {
 		AsyncStorage.getItem('gold').then(g => setGold(g ? +g : 0));
 	}, []);
 
-	// 3) Purchase handler
+	// Purchase handler
 	const handleBuy = useCallback(
 		async item => {
 			if (gold < item.cost) {
@@ -64,6 +96,13 @@ export default function StoreScreen() {
 	return (
 		<ScreenLayout title="Store">
 			<SafeAreaView style={styles.container}>
+				{/* Refresh timer display */}
+				<View style={{ paddingVertical: 8, alignItems: 'center' }}>
+					<Text style={{ fontSize: 16, color: colors.primary }}>
+						Refresh in {timer}s
+					</Text>
+				</View>
+
 				<SectionList
 					sections={sections}
 					extraData={[gold, expanded]}
@@ -87,8 +126,7 @@ export default function StoreScreen() {
 									]}
 								>
 									<Text
-										style={[styles.itemText, { color: colors[item.rarity] }]}
-									>
+										style={[styles.itemText, { color: colors[item.rarity] }]}>
 										{name}
 									</Text>
 								</Pressable>

@@ -13,8 +13,6 @@ class CharacterService {
 
 	async _init() {
 		try {
-			// AsyncStorage.removeItem(STORAGE_KEY);
-			// AsyncStorage.clear();
 			const stored = await AsyncStorage.getItem(STORAGE_KEY);
 			if (stored) {
 				this.currentCharacter = JSON.parse(stored);
@@ -48,17 +46,13 @@ class CharacterService {
 			createdAt: Date.now(),
 			name: 'Joko',
 			stats: {
-				health: 100,            // Health
-				mana: 0,            // Mana
-				stamina: 30,
+				health: 10,
 				attackPower: 1,
-				spellPower: 0,
 				defense: 0,
 				attackSpeed: 1,
-				critChance: 75,     // percent
-				castChance: 0,     // percent
-				blockChance: 0,    // percent
-				age: 0
+				mana: 0,
+				castChance: 0,
+				spellPower: 0,
 			},
 			gear: [],            // list of equipped gear IDs
 			skills: [],          // list of learned skill IDs
