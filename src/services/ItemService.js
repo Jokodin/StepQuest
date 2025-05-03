@@ -5,10 +5,11 @@ import { v4 as uuidv4 } from 'uuid';
 // Categories list
 const categories = [
 	'Weapon',
-	'Shield',
 	'Armor',
 	'Gloves',
 	'Helmet',
+	'Ring',
+	'Amulet',
 ];
 
 // Rarity levels and cost settings
@@ -19,27 +20,27 @@ const BASE_PRICE = 1000;
 // Stat pools and ranges for random stats
 const statsPool = {
 	Weapon: ['damage', 'attackPower'],
-	Shield: ['blockChance', 'armor'],
 	Armor: ['armor', 'health'],
 	Gloves: ['attackSpeed'],
 	Helmet: ['health', 'armor'],
+	Ring: ['attackPower'],
 };
 
 const statRanges = {
-	damage: [1, 3],
-	attackPower: [0.1, 1],
-	attackSpeed: [0.1, 1],
-	armor: [1, 2],
-	health: [10, 20],
-	blockChance: [1, 3],
+	damage: [0.1, 1.5], // balanced
+	attackPower: [0.1, 1.5], // multiplier of damage - may need nerf
+	attackSpeed: [0.1, 1.5], // multiplier of damage - may need nerf
+	armor: [0.1, 0.5], // balanced
+	health: [1, 6], // balanced
 };
 
 // Intrinsic stats generators per category (now using statRanges)
 const intrinsicStatsGenerators = {
 	Weapon: () => {
 		const [min, max] = statRanges.damage;
-		const val = Math.floor(Math.random() * (max - min + 1)) + min;
-		return { damage: val };
+		const raw = Math.random() * (max - min) + min;
+		const fixed = Math.round(raw * 100) / 100;
+		return { damage: fixed };
 	},
 	Shield: () => {
 		const [min, max] = statRanges.blockChance;
@@ -48,8 +49,9 @@ const intrinsicStatsGenerators = {
 	},
 	Armor: () => {
 		const [min, max] = statRanges.armor;
-		const val = Math.floor(Math.random() * (max - min + 1)) + min;
-		return { armor: val };
+		const raw = Math.random() * (max - min) + min;
+		const fixed = Math.round(raw * 10) / 10;
+		return { armor: fixed };
 	},
 	Gloves: () => {
 		const [min, max] = statRanges.attackSpeed;
@@ -59,8 +61,20 @@ const intrinsicStatsGenerators = {
 	},
 	Helmet: () => {
 		const [min, max] = statRanges.armor;
+		const raw = Math.random() * (max - min) + min;
+		const fixed = Math.round(raw * 10) / 10;
+		return { armor: fixed };
+	},
+	Ring: () => {
+		const [min, max] = statRanges.attackPower;
+		const raw = Math.random() * (max - min) + min;
+		const fixed = Math.round(raw * 10) / 10;
+		return { attackPower: fixed };
+	},
+	Amulet: () => {
+		const [min, max] = statRanges.health;
 		const val = Math.floor(Math.random() * (max - min + 1)) + min;
-		return { armor: val };
+		return { health: val };
 	},
 };
 

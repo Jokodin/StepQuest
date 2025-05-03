@@ -5,6 +5,7 @@ import {
 	FlatList,
 	TouchableHighlight,
 	StyleSheet,
+	TouchableOpacity,
 } from 'react-native';
 import { ChevronRight } from 'lucide-react-native';
 import ThemedText from '@/components/ThemedText';
@@ -14,6 +15,10 @@ import { StepServiceInstance } from '@/services/StepService';
 import { useIsFocused } from '@react-navigation/native';
 import { colors } from '@/constants/theme';
 import styles from '../LogsScreen/LogsScreen.styles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import TownDefenseService from '@/services/TownDefenseService';
+
+const STEP_THRESHOLD = 5;
 
 export default function LogsScreen({ navigation }) {
 	const isFocused = useIsFocused();
@@ -56,6 +61,16 @@ export default function LogsScreen({ navigation }) {
 			WalkRewardService.endSession();
 		}
 	}, [isFocused]);
+
+	const handleTestBattle = async () => {
+		try {
+			await WalkRewardService.processSteps(STEP_THRESHOLD);
+			// Refresh to show the new battle
+			refresh();
+		} catch (e) {
+			console.warn('Test battle failed:', e);
+		}
+	};
 
 	const renderLog = ({ item, index }) => (
 		<View>
@@ -104,6 +119,16 @@ export default function LogsScreen({ navigation }) {
 	return (
 		<ScreenLayout title="Walk Logs">
 			<SafeAreaView style={styles.container}>
+				{/* Test Battle Button */}
+				<TouchableOpacity
+					style={styles.testButton}
+					onPress={handleTestBattle}
+				>
+					<ThemedText style={styles.testButtonText}>
+						Test Battle ({STEP_THRESHOLD} steps)
+					</ThemedText>
+				</TouchableOpacity>
+
 				<View style={styles.areaHeader}>
 					<ThemedText style={styles.areaText}>{area}</ThemedText>
 

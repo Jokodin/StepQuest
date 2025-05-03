@@ -2,13 +2,24 @@ import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { colors } from '@/constants/theme';
 
-export default function HealthBar({ current, max, color }) {
+export default function HealthBar({ current, max, color, reversed = false }) {
 	const percentage = Math.max(0, Math.min(100, (current / max) * 100));
 
 	return (
 		<View style={styles.container}>
-			<View style={[styles.background, { backgroundColor: color + '20' }]} />
-			<View style={[styles.bar, { width: `${percentage}%`, backgroundColor: color + '40' }]} />
+			<View style={[
+				styles.background,
+			]}>
+				<View style={[
+					styles.fill,
+					{
+						width: `${percentage}%`,
+						backgroundColor: color + '40',
+						right: reversed ? 0 : undefined,
+						left: reversed ? undefined : 0
+					}
+				]} />
+			</View>
 		</View>
 	);
 }
@@ -20,16 +31,14 @@ const styles = StyleSheet.create({
 		left: 0,
 		right: 0,
 		bottom: 0,
-		flexDirection: 'row',
+		zIndex: -1,
 	},
 	background: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		bottom: 0,
+		flex: 1,
+		overflow: 'hidden',
 	},
-	bar: {
+	fill: {
+		position: 'absolute',
 		height: '100%',
 	},
 }); 

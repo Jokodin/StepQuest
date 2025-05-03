@@ -13,16 +13,18 @@ const MAX_LOG_ENTRIES = 50;
 
 // Define themed monster lists per area
 const areaThemes = {
-	1: ['Skeleton', 'Ghoul', 'Zombie', 'Wraith', 'Vampire'],
-	2: ['Slime', 'Blob', 'Ooze', 'Gelatinous Cube', 'Sludge'],
-	3: ['Wolf', 'Bear', 'Tiger', 'Panther', 'Lion'],
+	1: ['Skeleton', 'Zombie', 'Ghoul', 'Vampire'],
+	2: ['Slime', 'Evil Tree', 'Fungus Monster', 'Gelatinous Cube'],
+	3: ['Pirate Ghost', 'Cursed Parrot', 'Kraken Spawn', 'Drowned Sailor'],
+	4: ['Fire Imp', 'Lava Golem', 'Ash Wraith', 'Magma Serpent'],
 };
 
 // Thematic names for each area
 export const areaNames = {
 	1: 'Crypt of the Damned',
 	2: 'Slime Bog',
-	3: 'Beastwood Forest',
+	3: 'Pirate Cove',
+	4: 'Volcanic Crater',
 };
 
 class WalkRewardService {
@@ -41,11 +43,11 @@ class WalkRewardService {
 	}
 
 	async _init() {
-		console.log('[WalkRewardService] Initializing');
+		// console.log('[WalkRewardService] Initializing');
 		const rawLogs = await AsyncStorage.getItem(LOGS_KEY);
-		console.log('[WalkRewardService] Raw logs from storage:', rawLogs);
+		// console.log('[WalkRewardService] Raw logs from storage:', rawLogs);
 		this.logs = rawLogs ? JSON.parse(rawLogs) : [];
-		console.log('[WalkRewardService] Parsed logs:', this.logs);
+		// console.log('[WalkRewardService] Parsed logs:', this.logs);
 
 		if (!(await AsyncStorage.getItem(BOXES_KEY))) {
 			await AsyncStorage.setItem(BOXES_KEY, JSON.stringify([]));
@@ -123,7 +125,6 @@ class WalkRewardService {
 			console.log(`[WalkRewardService] Triggering battle at ${this.stepsInArea} steps (${isBoss ? 'BOSS' : 'regular'})`);
 			const battleLog = await this._runBattle(this.stepsInArea, isBoss);
 			this.logs = [battleLog, ...this.logs].slice(0, MAX_LOG_ENTRIES);
-			console.log('[WalkRewardService] Updated logs:', this.logs);
 			await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(this.logs));
 
 			newSteps -= STEP_THRESHOLD;

@@ -104,5 +104,77 @@ export default StyleSheet.create({
 		color: colors.textSecondary,
 		textAlign: 'center',
 	},
-
+	testButton: {
+		backgroundColor: colors.primary,
+		padding: 12,
+		margin: 16,
+		borderRadius: 8,
+		alignItems: 'center',
+	},
+	testButtonText: {
+		color: colors.background,
+		fontWeight: 'bold',
+	},
+	areaHeader: {
+		padding: 16,
+		backgroundColor: colors.backgroundSecondary,
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+	},
+	areaText: {
+		fontSize: 18,
+		fontWeight: 'bold',
+	},
+	progressBar: {
+		height: 8,
+		backgroundColor: colors.backgroundSecondary,
+		borderRadius: 4,
+		marginTop: 8,
+		overflow: 'hidden',
+	},
+	progressFill: {
+		height: '100%',
+		backgroundColor: colors.primary,
+	},
+	list: {
+		padding: 16,
+	},
+	entry: {
+		backgroundColor: colors.backgroundSecondary,
+		borderRadius: 8,
+		padding: 16,
+		marginBottom: 12,
+	},
+	entryHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		marginBottom: 8,
+	},
+	entryTitle: {
+		fontSize: 16,
+		fontWeight: 'bold',
+	},
+	entryDate: {
+		fontSize: 14,
+		color: colors.textSecondary,
+	},
+	entryContent: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+	},
+	entryText: {
+		fontSize: 14,
+	},
+	entryResult: {
+		fontSize: 14,
+		fontWeight: 'bold',
+	},
+	success: {
+		color: colors.success,
+	},
+	failure: {
+		color: colors.error,
+	},
 });

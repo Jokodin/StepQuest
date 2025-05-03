@@ -48,6 +48,7 @@ class CharacterService {
 			stats: {
 				health: 10,
 				attackPower: 1,
+				damage: 1,
 				defense: 0,
 				attackSpeed: 1,
 				mana: 0,
