@@ -101,7 +101,7 @@ class StepService {
 		let rawToday = 0;
 		try {
 			rawToday = await svc.getTodaySteps();
-			console.log('[StepService] Raw steps from platform:', rawToday);
+			//console.log('[StepService] Raw steps from platform:', rawToday);
 		} catch (e) {
 			console.error('Error polling today steps', e);
 			return;
@@ -110,11 +110,11 @@ class StepService {
 		// Determine current date (YYYY-MM-DD) in local time
 		const now = new Date();
 		const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
-		console.log('[StepService] Current date:', todayStr, 'Install date:', this.installDate);
+		//console.log('[StepService] Current date:', todayStr, 'Install date:', this.installDate);
 
 		// If no installDate yet, or installDate != today, reset baseline
 		if (!this.installDate || this.installDate !== todayStr) {
-			console.log('[StepService] Setting new baseline:', rawToday);
+			//console.log('[StepService] Setting new baseline:', rawToday);
 			this.installDate = todayStr;
 			this.installBaseline = rawToday;
 			await this._saveInstallData(todayStr, rawToday);
@@ -126,14 +126,14 @@ class StepService {
 				? rawToday - this.installBaseline
 				: rawToday;
 
-		console.log('[StepService] Computed today steps:', computedToday, 'Baseline:', this.installBaseline);
+		////console.log('[StepService] Computed today steps:', computedToday, 'Baseline:', this.installBaseline);
 
 		// Protect against negative
 		this.today = computedToday >= 0 ? computedToday : rawToday;
 
 		// Lifetime should be the same as today for a fresh install/reset
 		this.lifetime = this.today;
-		console.log('[StepService] Setting lifetime to:', this.lifetime);
+		//console.log('[StepService] Setting lifetime to:', this.lifetime);
 
 		await this._saveLifetime();
 
@@ -145,19 +145,19 @@ class StepService {
 	}
 
 	getLifetime() {
-		console.log('[StepService] getLifetime', this.lifetime);
+		//console.log('[StepService] getLifetime', this.lifetime);
 		return this.lifetime;
 	}
 
 	async reset() {
-		console.log('[StepService] Resetting service');
+		//console.log('[StepService] Resetting service');
 
 		// Get current raw steps before clearing anything
 		const svc = Platform.OS === 'android' ? GoogleFitService : HealthKitService;
 		if (await svc.authorize()) {
 			try {
 				const rawToday = await svc.getTodaySteps();
-				console.log('[StepService] Current raw steps:', rawToday);
+				//console.log('[StepService] Current raw steps:', rawToday);
 
 				// Clear all stored data
 				await Promise.all([
@@ -178,7 +178,7 @@ class StepService {
 				this.lifetime = 0;
 				this._lastRawToday = rawToday;
 
-				console.log('[StepService] Reset complete with baseline:', rawToday);
+				//console.log('[StepService] Reset complete with baseline:', rawToday);
 			} catch (e) {
 				console.error('[StepService] Error getting steps during reset:', e);
 			}

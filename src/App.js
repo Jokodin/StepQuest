@@ -59,7 +59,7 @@ export default function App() {
 				backgroundColor="transparent"   // on Android, make it match your header
 				barStyle="dark-content"         // or "light-content" to suit your theme
 			/>
-			<Stack.Navigator initialRouteName="Items">
+			<Stack.Navigator initialRouteName="Character">
 				{/* <Stack.Screen name="Town" component={TownScreen} /> */}
 				<Stack.Screen name="Character" component={CharacterScreen} />
 				<Stack.Screen name="Items" component={InventoryScreen} />

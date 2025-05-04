@@ -32,14 +32,6 @@ class CharacterService {
 		return this.currentCharacter;
 	}
 
-	getStats() {
-		return this.getCurrentCharacter().stats;
-	}
-
-	getStat(key) {
-		return this.getStats()[key];
-	}
-
 	async createNewCharacter() {
 		const newChar = {
 			id: Date.now().toString(),
@@ -47,16 +39,17 @@ class CharacterService {
 			name: 'Joko',
 			stats: {
 				health: 10,
-				attackPower: 1,
 				damage: 1,
-				defense: 0,
+				attackPower: 1,
 				attackSpeed: 1,
-				mana: 0,
-				castChance: 0,
-				spellPower: 0,
+				strength: 1,
+				intelligence: 1,
+				dexterity: 1,
+				vitality: 1,
+				willpower: 1,
+				castSpeed: 0.2,
 			},
 			gear: [],            // list of equipped gear IDs
-			skills: [],          // list of learned skill IDs
 		};
 		this.currentCharacter = newChar;
 		try {
@@ -107,9 +100,9 @@ class CharacterService {
 	}
 
 	/**
- * Equip an item: add its id to gear list and add its stats.
- * @param {{ id: string, stats: Record<string,number> }} item
- */
+	 * Equip an item: add its id to gear list and add its stats.
+	 * @param {{ id: string, stats: Record<string,number> }} item
+	 */
 	async equipItem(item) {
 		const char = this.getCurrentCharacter();
 		// 1) merge gear array
@@ -137,6 +130,180 @@ class CharacterService {
 		}
 		await this.updateCharacter({ gear: newGear });
 		return this.updateStats(newStats);
+	}
+
+	/**
+	 * Calculate bonus attack power from Strength
+	 * @returns {number} - Bonus attack power multiplier
+	 */
+	#calculateStrengthBonus() {
+		const totalStrength = this.getStat(this.currentCharacter, 'strength');
+		// Each point of strength adds 5% to attack power
+		return 1 + (totalStrength * 0.05);
+	}
+
+	/**
+	 * Calculate bonus cast chance from Intelligence
+	 * @returns {number} - Bonus cast chance percentage
+	 */
+	#calculateIntelligenceBonus() {
+		const totalIntelligence = this.getStat(this.currentCharacter, 'intelligence');
+		// Each point of intelligence adds 2% to cast chance
+		return totalIntelligence * 2;
+	}
+
+	/**
+	 * Calculate bonus attack speed from Dexterity
+	 * @returns {number} - Bonus attack speed multiplier
+	 */
+	#calculateDexterityBonus() {
+		const totalDexterity = this.getStat(this.currentCharacter, 'dexterity');
+		// Each point of dexterity adds 3% to attack speed
+		return 1 + (totalDexterity * 0.03);
+	}
+
+	/**
+	 * Calculate bonus health from Vitality
+	 * @returns {number} - Bonus health multiplier
+	 */
+	#calculateVitalityBonus() {
+		const totalVitality = this.getStat('vitality');
+		// Each point of vitality adds 10% to health
+		return 1 + (totalVitality * 0.10);
+	}
+
+	/**
+	 * Calculate bonus mana from Willpower
+	 * @returns {number} - Bonus mana multiplier
+	 */
+	#calculateWillpowerBonus() {
+		const totalWillpower = this.getStat('willpower');
+		// Each point of willpower adds 15% to mana
+		return 1 + (totalWillpower * 0.15);
+	}
+
+	/**
+	 * Get a character's final stat value including base stats, item bonuses, and attribute bonuses
+	 * @param {string} statName - Name of the stat to calculate
+	 * @returns {number} - Final stat value
+	 */
+	getStat(statName) {
+		const baseValue = this.currentCharacter.stats[statName] || 0;
+
+		// Sum stat from equipped items
+		const itemValue = this.currentCharacter.gear.reduce((sum, itemId) => {
+			const item = this.getItem(itemId);
+			return sum + (item?.stats?.[statName] || 0);
+		}, 0);
+
+		// Apply attribute bonuses for specific stats
+		switch (statName) {
+			case 'attackPower':
+				return (baseValue + itemValue) * this.#calculateStrengthBonus();
+
+			case 'attackSpeed':
+				return (baseValue + itemValue) * this.#calculateDexterityBonus();
+
+			case 'castChance':
+				return baseValue + itemValue + this.#calculateIntelligenceBonus();
+
+			case 'health':
+				return (baseValue + itemValue) * this.#calculateVitalityBonus();
+
+			case 'mana':
+				return (baseValue + itemValue) * this.#calculateWillpowerBonus();
+
+			default:
+				return baseValue + itemValue;
+		}
+	}
+
+	static async getCharacter(characterId) {
+		try {
+			const character = await AsyncStorage.getItem(`character_${characterId}`);
+			if (!character) return null;
+
+			const parsedCharacter = JSON.parse(character);
+			// Ensure spells array exists
+			if (!parsedCharacter.spells) {
+				parsedCharacter.spells = [];
+			}
+			// Ensure spell cooldowns object exists
+			if (!parsedCharacter.spellCooldowns) {
+				parsedCharacter.spellCooldowns = {};
+			}
+			return parsedCharacter;
+		} catch (error) {
+			console.error('Error getting character:', error);
+			return null;
+		}
+	}
+
+	static async saveCharacter(character) {
+		try {
+			// Ensure spells array exists
+			if (!character.spells) {
+				character.spells = [];
+			}
+			// Ensure spell cooldowns object exists
+			if (!character.spellCooldowns) {
+				character.spellCooldowns = {};
+			}
+			await AsyncStorage.setItem(`character_${character.id}`, JSON.stringify(character));
+		} catch (error) {
+			console.error('Error saving character:', error);
+		}
+	}
+
+	static async addSpell(characterId, spellKey) {
+		try {
+			const character = await this.getCharacter(characterId);
+			if (!character) return false;
+
+			if (!character.spells.includes(spellKey)) {
+				character.spells.push(spellKey);
+				character.spellCooldowns[spellKey] = 0; // Initialize cooldown
+				await this.saveCharacter(character);
+				return true;
+			}
+			return false;
+		} catch (error) {
+			console.error('Error adding spell:', error);
+			return false;
+		}
+	}
+
+	static async removeSpell(characterId, spellKey) {
+		try {
+			const character = await this.getCharacter(characterId);
+			if (!character) return false;
+
+			const index = character.spells.indexOf(spellKey);
+			if (index !== -1) {
+				character.spells.splice(index, 1);
+				delete character.spellCooldowns[spellKey];
+				await this.saveCharacter(character);
+				return true;
+			}
+			return false;
+		} catch (error) {
+			console.error('Error removing spell:', error);
+			return false;
+		}
+	}
+
+	static async updateSpellCooldown(characterId, spellKey, lastCastTime) {
+		try {
+			const character = await this.getCharacter(characterId);
+			if (!character) return false;
+
+			character.spellCooldowns[spellKey] = lastCastTime;
+			await this.saveCharacter(character);
+			return true;
+		} catch (error) {
+			console.error('Error updating spell cooldown:', error);
+			return false;
+		}
 	}
 }
 

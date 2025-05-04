@@ -15,7 +15,8 @@ import styles from './InventoryScreen.styles';
 import { colors } from '@/constants/theme';
 import ScreenLayout from '@/components/ScreenLayout';
 import Item from '@/models/Item';
-import { categories } from '@/services/ItemService';
+import { itemTypes } from '@/services/ItemService';
+import CharacterService from '@/services/CharacterService';
 
 export default function InventoryScreen() {
 	const isFocused = useIsFocused();
@@ -29,11 +30,11 @@ export default function InventoryScreen() {
 	const loadData = useCallback(async () => {
 		const invRaw = await AsyncStorage.getItem('inventory');
 		const invArr = invRaw ? JSON.parse(invRaw) : [];
-		setInventory(invArr.map(obj => Item.fromJSON(obj)));
+		setInventory(invArr);
 
 		const eqRaw = await AsyncStorage.getItem('equipped_items');
 		const eqArr = eqRaw ? JSON.parse(eqRaw) : [];
-		setEquippedItems(eqArr.map(obj => Item.fromJSON(obj)));
+		setEquippedItems(eqArr);
 	}, []);
 
 	useEffect(() => {
@@ -48,26 +49,35 @@ export default function InventoryScreen() {
 
 	// Equip an item (add to equippedItems)
 	const handleEquip = async item => {
-		// add new item
-		const newEquipped = [...equippedItems, item];
-		// persist
-		await AsyncStorage.setItem(
-			'equipped_items',
-			JSON.stringify(newEquipped.map(i => i.toJSON()))
-		);
-		setEquippedItems(newEquipped);
-		showBanner(`${item.name} equipped`);
+		try {
+			// Add to equipped items list
+			const newEquipped = [...equippedItems, item];
+			await AsyncStorage.setItem(
+				'equipped_items',
+				JSON.stringify(newEquipped)
+			);
+			setEquippedItems(newEquipped);
+			showBanner(`${item.name} equipped`);
+		} catch (error) {
+			console.error('Error equipping item:', error);
+			showBanner('Failed to equip item');
+		}
 	};
 
 	// Unequip an item (remove by id)
 	const handleUnequip = async item => {
-		const newEquipped = equippedItems.filter(eq => eq.id !== item.id);
-		await AsyncStorage.setItem(
-			'equipped_items',
-			JSON.stringify(newEquipped.map(i => i.toJSON()))
-		);
-		setEquippedItems(newEquipped);
-		showBanner(`${item.name} unequipped`);
+		try {
+			const newEquipped = equippedItems.filter(eq => eq.id !== item.id);
+			await AsyncStorage.setItem(
+				'equipped_items',
+				JSON.stringify(newEquipped)
+			);
+			setEquippedItems(newEquipped);
+			showBanner(`${item.name} unequipped`);
+		} catch (error) {
+			console.error('Error unequipping item:', error);
+			showBanner('Failed to unequip item');
+		}
 	};
 
 	const toggleExpand = itemId => {
@@ -75,12 +85,10 @@ export default function InventoryScreen() {
 	};
 
 	// Sections for Inventory tab: items not equipped
-	const inventorySections = categories.map(cat => ({
+	const inventorySections = itemTypes.map(cat => ({
 		title: cat,
 		data: inventory
-			.filter(
-				it => it.category === cat && !equippedItems.some(eq => eq.id === it.id)
-			)
+			.filter(it => it && it.type === cat && !equippedItems.some(eq => eq && eq.id === it.id))
 			.sort((a, b) => {
 				// sort by rarity then quality
 				const r = a.rarity.localeCompare(b.rarity);
@@ -89,13 +97,14 @@ export default function InventoryScreen() {
 	}));
 
 	// Sections for Equipped tab: grouped by category
-	const equippedSections = categories.map(cat => ({
+	const equippedSections = itemTypes.map(cat => ({
 		title: cat,
-		data: equippedItems.filter(eq => eq.category === cat),
+		data: equippedItems.filter(eq => eq && eq.type === cat),
 	}));
 
 	// Render an inventory item row
 	const renderInventoryItem = ({ item }) => {
+		if (!item) return null;
 		const isOpen = expanded[item.id];
 		return (
 			<View style={styles.itemContainerWrapper}>
@@ -107,7 +116,7 @@ export default function InventoryScreen() {
 				</TouchableOpacity>
 				{isOpen && (
 					<View style={styles.statsContainer}>
-						{Object.entries(item.stats).map(([stat, val]) => (
+						{Object.entries(item.stats || {}).map(([stat, val]) => (
 							<Text key={stat} style={styles.statText}>
 								{stat}: {val}
 							</Text>
@@ -123,6 +132,7 @@ export default function InventoryScreen() {
 
 	// Render an equipped item row
 	const renderEquippedItem = ({ item }) => {
+		if (!item) return null;
 		const isOpen = expanded[item.id];
 		return (
 			<View style={styles.itemContainerWrapper}>
@@ -134,7 +144,7 @@ export default function InventoryScreen() {
 				</TouchableOpacity>
 				{isOpen && (
 					<View style={styles.statsContainer}>
-						{Object.entries(item.stats).map(([stat, val]) => (
+						{Object.entries(item.stats || {}).map(([stat, val]) => (
 							<Text key={stat} style={styles.statText}>
 								{stat}: {val}
 							</Text>

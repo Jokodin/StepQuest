@@ -1,7 +1,7 @@
 // screens/CharacterScreen.styles.js
 
 import { StyleSheet } from 'react-native';
-import { colors } from '@/theme/colors';
+import { colors } from '@/constants/theme';
 
 export default StyleSheet.create({
 	container: {
@@ -47,11 +47,46 @@ export default StyleSheet.create({
 		flexWrap: 'wrap',
 		gap: 12,
 	},
+	characterStatsGrid: {
+		flexDirection: 'column',
+		gap: 8,
+	},
 	statCell: {
 		width: '48%',
 		padding: 12,
 		backgroundColor: colors.card,
 		borderRadius: 8,
+	},
+	characterStatCell: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		padding: 12,
+		backgroundColor: colors.surface,
+		borderRadius: 8,
+		marginBottom: 8,
+		width: '100%',
+	},
+	statLabelContainer: {
+		flex: 1,
+		marginRight: 16,
+	},
+	characterStatLabel: {
+		fontSize: 16,
+		fontWeight: 'bold',
+		color: colors.text,
+		marginBottom: 4,
+	},
+	statDescription: {
+		fontSize: 12,
+		color: colors.textSecondary,
+	},
+	characterStatValue: {
+		fontSize: 16,
+		fontWeight: 'bold',
+		color: colors.primary,
+		minWidth: 40,
+		textAlign: 'right',
 	},
 	statLabel: {
 		fontSize: 14,
@@ -75,20 +110,27 @@ export default StyleSheet.create({
 		margin: 16,
 		overflow: 'hidden',
 	},
+	tabs: {
+		flexDirection: 'row',
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+		marginBottom: 16,
+	},
 	tab: {
 		flex: 1,
 		paddingVertical: 12,
 		alignItems: 'center',
 	},
 	activeTab: {
-		backgroundColor: colors.primary,
+		borderBottomWidth: 2,
+		borderBottomColor: colors.primary,
 	},
 	tabText: {
+		color: colors.text,
 		fontSize: 16,
-		color: colors.textSecondary,
 	},
 	activeTabText: {
-		color: colors.text,
+		color: colors.primary,
 		fontWeight: 'bold',
 	},
 });

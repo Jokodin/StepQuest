@@ -1,6 +1,8 @@
 // src/services/BattleService.js
 // Simulates a battle between the player and a pack of monsters, producing an ordered log of actions.
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import CharacterService from './CharacterService';
+import SpellService from './SpellService';
 
 export class BattleService {
 	/**
@@ -37,28 +39,6 @@ export class BattleService {
 	}
 
 	/**
-	 * Calculate damage with mitigation
-	 * @param {number} attack - Attack power
-	 * @param {number} defense - Defense power
-	 * @param {boolean} isPlayer - Whether the attack is from the player
-	 * @returns {object} - Contains final damage and log text
-	 */
-	static calculateDamage(attack, defense, isPlayer) {
-		const baseDamage = Math.max(0, attack - defense);
-		const mitigatedDamage = Math.max(1, Math.floor(baseDamage * 0.5));
-		const finalDamage = isPlayer ? mitigatedDamage : Math.round(baseDamage * 10) / 10;
-
-		const logText = isPlayer
-			? `deals ${finalDamage} damage${mitigatedDamage < baseDamage ? ` (mitigated by ${Math.round((baseDamage - mitigatedDamage) * 10) / 10})` : ''}`
-			: `deals ${finalDamage} damage`;
-
-		return {
-			damage: finalDamage,
-			logText
-		};
-	}
-
-	/**
 	 * Simulate a fight.
 	 * @param {object} playerChar
 	 *   { name?: string,
@@ -87,32 +67,29 @@ export class BattleService {
 			console.warn('Could not load equipped items:', e);
 		}
 
-		// Helper to aggregate stat from base + equipped items
-		function getStat(key) {
-			const baseVal = playerChar.stats[key] || 0;
-			const equipVal = equippedItems.reduce((sum, item) => {
-				const v = item.stats?.[key] || 0;
-				return sum + v;
-			}, 0);
-			return baseVal + equipVal;
-		}
+		// Get spells from equipped amulets
+		const equippedSpells = equippedItems
+			.filter(item => item.type === 'amulet' && item.stats?.spell)
+			.map(item => item.stats.spell);
 
-		// Initialize player state with aggregated stats
+		// Initialize player state with final stats
 		const playerName = playerChar.name || 'Player';
-		let playerHP = getStat('health');
+		const playerHP = CharacterService.getStat('health');
 		const playerMaxHP = playerHP;
-		const atkSpeed = getStat('attackSpeed') || 1;
-		const playerInterval = 1 / atkSpeed;
-		const defense = getStat('defense') || 0;
-		const critChance = (getStat('critChance') || 0) / 100;
-		const attackPower = getStat('attackPower') || 1;
-		const weaponDamageRaw = getStat('damage');
-		const weaponDamage = weaponDamageRaw > 0 ? weaponDamageRaw : 1;
+		let playerCurrentHP = playerHP;
+		const atkSpeed = CharacterService.getStat('attackSpeed');
+		const armor = CharacterService.getStat('armor');
+		const critChance = (CharacterService.getStat('critChance') || 0) / 100;
+		const attackPower = CharacterService.getStat('attackPower');
+		const weaponDamage = CharacterService.getStat('damage');
+		const castSpeed = CharacterService.getStat('castSpeed') || 1;
+		let playerCurrentMana = CharacterService.getStat('mana') || 100;
 
 		// Initialize battle state
 		const battleStartTime = Date.now();
 		let currentTime = battleStartTime;
-		let nextPlayerAttack = currentTime + (1000 / atkSpeed); // Convert attacks/sec to milliseconds
+		let nextPlayerAttack = currentTime + (1000 / atkSpeed);
+		let nextPlayerSpell = currentTime + (1000 / castSpeed);
 		const logs = [];
 
 		// Initialize monsters with their attack times
@@ -173,30 +150,23 @@ export class BattleService {
 		));
 
 		// Battle loop
-		while (playerHP > 0 && mobs.length > 0) {
-			// Find the next attack time among all actors
+		while (playerCurrentHP > 0 && mobs.length > 0) {
+			// Find the next action time among all actors
 			const nextMonsterAttack = Math.min(...mobs.map(m => m.nextAttack));
-			const nextAttackTime = Math.min(nextPlayerAttack, nextMonsterAttack);
+			const nextActionTime = Math.min(nextPlayerAttack, nextPlayerSpell, nextMonsterAttack);
 
-			// Advance time to the next attack
-			currentTime = nextAttackTime;
+			// Advance time to the next action
+			currentTime = nextActionTime;
 
-			// Determine who attacks at this time
-			const isPlayerTurn = nextPlayerAttack <= nextMonsterAttack;
-			let shouldPlayerAttack = isPlayerTurn;
-
-			// If multiple actors are ready at the same time, randomly choose one
-			if (nextPlayerAttack === nextMonsterAttack) {
-				shouldPlayerAttack = Math.random() < 0.5;
-				console.log('[BattleService] Multiple actors ready, randomly choosing:', {
-					time: currentTime - battleStartTime,
-					playerReady: nextPlayerAttack === currentTime,
-					monstersReady: mobs.filter(m => m.nextAttack === currentTime).map(m => m.id),
-					playerAttacks: shouldPlayerAttack
-				});
+			// Determine who acts at this time
+			let actionType = 'monster';
+			if (nextPlayerAttack <= nextActionTime) {
+				actionType = 'attack';
+			} else if (nextPlayerSpell <= nextActionTime && equippedSpells.length > 0) {
+				actionType = 'spell';
 			}
 
-			if (shouldPlayerAttack) {
+			if (actionType === 'attack') {
 				// Player attack
 				const idx = Math.floor(Math.random() * mobs.length);
 				const mob = mobs[idx];
@@ -217,7 +187,7 @@ export class BattleService {
 				logs.push(createLogEntry(
 					playerName,
 					playerMaxHP,
-					playerHP,
+					playerCurrentHP,
 					`${playerName} ${hitText} ${mob.id} for ${Math.round(dmg * 10) / 10} damage`,
 					currentTime,
 					{
@@ -246,23 +216,57 @@ export class BattleService {
 					mobs.splice(idx, 1);
 				}
 				nextPlayerAttack = currentTime + (1000 / atkSpeed);
+			} else if (actionType === 'spell') {
+				// Cast a random spell from equipped amulets
+				const spellKey = equippedSpells[Math.floor(Math.random() * equippedSpells.length)];
+				const spell = SpellService.getSpell(spellKey);
+
+				if (spell && playerCurrentMana >= spell.manaCost) {
+					playerCurrentMana -= spell.manaCost;
+
+					// Apply spell effects
+					if (spell.damage) {
+						const idx = Math.floor(Math.random() * mobs.length);
+						const mob = mobs[idx];
+						const dmg = spell.damage * attackPower;
+						mob.hp -= dmg;
+
+						logs.push(createLogEntry(
+							playerName,
+							playerMaxHP,
+							playerCurrentHP,
+							`${playerName} casts ${spell.name} for ${Math.round(dmg * 10) / 10} damage`,
+							currentTime
+						));
+
+						if (mob.hp <= 0) {
+							logs.push(createLogEntry(
+								mob.id,
+								mob.maxHp,
+								0,
+								`${mob.id} is defeated.`,
+								currentTime + 1
+							));
+							mobs.splice(idx, 1);
+						}
+					}
+				}
+				nextPlayerSpell = currentTime + (1000 / castSpeed);
 			} else {
 				// Monster's turn - find all monsters ready to attack
 				const readyMonsters = mobs.filter(m => m.nextAttack === currentTime);
 				for (const mob of readyMonsters) {
 					// Calculate damage using monster's base damage
 					let rawDmg = randFloat(mob.baseDamage);
-					const armor = getStat('armor') || 0;
-					const { damage: netDmg, logText } = BattleService.calculateDamage(rawDmg, armor, false);
-					playerHP -= netDmg;
-					const playerRemaining = Math.max(0, playerHP);
+					let netDmg = Math.max(0, rawDmg - armor);
+					playerCurrentHP -= netDmg;
 
 					// Use currentTime for the attack, then increment for each subsequent action
 					logs.push(createLogEntry(
 						mob.id,
 						mob.maxHp,
 						mob.hp,
-						`${mob.id} ${logText}`,
+						`${mob.id} deals ${netDmg} damage`,
 						currentTime,
 						{
 							id: mob.id,
@@ -272,7 +276,7 @@ export class BattleService {
 						}
 					));
 
-					if (playerHP <= 0) {
+					if (playerCurrentHP <= 0) {
 						// Use a slightly later timestamp for the defeat message
 						logs.push(createLogEntry(
 							playerName,
@@ -290,12 +294,12 @@ export class BattleService {
 					}
 					mob.nextAttack = currentTime + (1000 / mob.attackSpeed);
 				}
-				if (playerHP <= 0) break;
+				if (playerCurrentHP <= 0) break;
 			}
 		}
 
 		// End result
-		const success = playerHP > 0;
+		const success = playerCurrentHP > 0;
 		if (success) {
 			logs.push(createLogEntry(
 				'All',
@@ -311,6 +315,125 @@ export class BattleService {
 			));
 		}
 		return { logs, success };
+	}
+
+	static async simulateBattle(player, monsters) {
+		const battleLog = [];
+		let playerCurrentHP = player.health;
+		let playerCurrentMana = player.willpower * 100; // Always start with full mana
+		const monsterHP = {};
+
+		// Initialize monster HP
+		monsters.forEach(monster => {
+			monsterHP[monster.id] = monster.maxHp;
+		});
+
+		// Add initial battle log
+		battleLog.push({
+			timestamp: Date.now(),
+			actor: 'System',
+			displayText: 'Battle Begins!',
+			monsterStats: monsters
+		});
+
+		// Battle loop
+		while (playerCurrentHP > 0 && Object.values(monsterHP).some(hp => hp > 0)) {
+			const currentTime = Date.now();
+
+			// Regenerate mana
+			const timeSinceLastRegen = (currentTime - (player.lastManaRegen || currentTime)) / 1000;
+			const manaToRegen = Math.floor(timeSinceLastRegen * 10); // 10 mana per second
+			if (manaToRegen > 0) {
+				playerCurrentMana = Math.min(
+					playerCurrentMana + manaToRegen,
+					player.willpower * 100
+				);
+				player.lastManaRegen = currentTime;
+			}
+
+			// Player's turn
+			if (playerCurrentHP > 0) {
+				// Check for spell casting
+				if (player.spells && player.spells.length > 0) {
+					for (const spellKey of player.spells) {
+						if (SpellService.canCastSpell(spellKey, { ...player, currentMana: playerCurrentMana }, player.spellCooldowns[spellKey] || 0)) {
+							const spellResult = SpellService.castSpell(spellKey, { ...player, currentMana: playerCurrentMana }, monsters[0]);
+							if (spellResult) {
+								if (spellResult.damage) {
+									const targetMonster = monsters[0];
+									monsterHP[targetMonster.id] -= spellResult.damage;
+									battleLog.push({
+										timestamp: currentTime,
+										actor: player.name,
+										displayText: spellResult.text,
+										actorCurrentHp: playerCurrentHP,
+										actorMaxHp: player.health
+									});
+								}
+								if (spellResult.healing) {
+									playerCurrentHP = Math.min(playerCurrentHP + spellResult.healing, player.health);
+									battleLog.push({
+										timestamp: currentTime,
+										actor: player.name,
+										displayText: spellResult.text,
+										actorCurrentHp: playerCurrentHP,
+										actorMaxHp: player.health
+									});
+								}
+								await CharacterService.updateSpellCooldown(player.id, spellKey, currentTime);
+							}
+						}
+					}
+				}
+
+				// Regular attack
+				const targetMonster = monsters[0];
+				if (targetMonster && monsterHP[targetMonster.id] > 0) {
+					const damage = this.calculateDamage(player.attackPower, targetMonster.defense, true, player.strength);
+					monsterHP[targetMonster.id] -= damage;
+					battleLog.push({
+						timestamp: currentTime,
+						actor: player.name,
+						displayText: `${player.name} attacks for ${Math.floor(damage)} damage!`,
+						actorCurrentHp: playerCurrentHP,
+						actorMaxHp: player.health
+					});
+				}
+			}
+
+			// Monsters' turn
+			monsters.forEach(monster => {
+				if (monsterHP[monster.id] > 0 && playerCurrentHP > 0) {
+					const damage = this.calculateMonsterDamage(monster.baseDamage, player.armor);
+					playerCurrentHP -= damage;
+					battleLog.push({
+						timestamp: currentTime,
+						actor: monster.id,
+						displayText: `${monster.id} attacks for ${Math.floor(damage)} damage!`,
+						actorCurrentHp: monsterHP[monster.id],
+						actorMaxHp: monster.maxHp
+					});
+				}
+			});
+
+			// Check for battle end
+			if (playerCurrentHP <= 0 || Object.values(monsterHP).every(hp => hp <= 0)) {
+				break;
+			}
+		}
+
+		// Add battle end log
+		const success = playerCurrentHP > 0;
+		battleLog.push({
+			timestamp: Date.now(),
+			actor: 'System',
+			displayText: success ? 'Battle Won!' : 'Battle Lost!'
+		});
+
+		return {
+			success,
+			log: battleLog
+		};
 	}
 }
 

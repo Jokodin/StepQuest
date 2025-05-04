@@ -1,15 +1,15 @@
 import Item from '@/models/Item';
 import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
+import SpellService from './SpellService';
+import CharacterService from './CharacterService';
 
 // Categories list
-const categories = [
-	'Weapon',
-	'Armor',
-	'Gloves',
-	'Helmet',
-	'Ring',
-	'Amulet',
+const itemTypes = [
+	'weapon',
+	// 'armor',
+	// 'gloves',
+	'amulet',
 ];
 
 // Rarity levels and cost settings
@@ -19,19 +19,22 @@ const BASE_PRICE = 1000;
 
 // Stat pools and ranges for random stats
 const statsPool = {
-	Weapon: ['damage', 'attackPower'],
-	Armor: ['armor', 'health'],
+	Weapon: ['damage'],
+	Armor: ['armor'],
 	Gloves: ['attackSpeed'],
-	Helmet: ['health', 'armor'],
-	Ring: ['attackPower'],
+	Amulet: ['armor'],
 };
 
 const statRanges = {
 	damage: [0.1, 1.5], // balanced
-	attackPower: [0.1, 1.5], // multiplier of damage - may need nerf
 	attackSpeed: [0.1, 1.5], // multiplier of damage - may need nerf
+	attackPower: [0.1, 1.0], // balanced
 	armor: [0.1, 0.5], // balanced
 	health: [1, 6], // balanced
+	vitality: [0.1, 0.5], // balanced
+	castSpeed: [0.1, 0.5], // balanced
+	mana: [1, 5], // balanced
+	willpower: [0.1, 0.5] // balanced
 };
 
 // Intrinsic stats generators per category (now using statRanges)
@@ -42,11 +45,11 @@ const intrinsicStatsGenerators = {
 		const fixed = Math.round(raw * 100) / 100;
 		return { damage: fixed };
 	},
-	Shield: () => {
-		const [min, max] = statRanges.blockChance;
-		const val = Math.floor(Math.random() * (max - min + 1)) + min;
-		return { blockChance: val };
-	},
+	// Shield: () => {
+	// 	const [min, max] = statRanges.blockChance;
+	// 	const val = Math.floor(Math.random() * (max - min + 1)) + min;
+	// 	return { blockChance: val };
+	// },
 	Armor: () => {
 		const [min, max] = statRanges.armor;
 		const raw = Math.random() * (max - min) + min;
@@ -65,24 +68,19 @@ const intrinsicStatsGenerators = {
 		const fixed = Math.round(raw * 10) / 10;
 		return { armor: fixed };
 	},
-	Ring: () => {
-		const [min, max] = statRanges.attackPower;
-		const raw = Math.random() * (max - min) + min;
-		const fixed = Math.round(raw * 10) / 10;
-		return { attackPower: fixed };
-	},
-	Amulet: () => {
-		const [min, max] = statRanges.health;
-		const val = Math.floor(Math.random() * (max - min + 1)) + min;
-		return { health: val };
-	},
+	// Ring: () => {
+	// 	const [min, max] = statRanges.attackPower;
+	// 	const raw = Math.random() * (max - min) + min;
+	// 	const fixed = Math.round(raw * 10) / 10;
+	// 	return { attackPower: fixed };
+	// },
 };
 
 /**
  * Roll one random stat for a given category.
  */
-function rollRandomStat(category) {
-	const pool = [...(statsPool[category] || [])];
+function rollRandomStat(itemTypes) {
+	const pool = [...(statsPool[itemTypes] || [])];
 	if (!pool.length) return {};
 	const stat = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
 	const [min, max] = statRanges[stat] || [1, 1];
@@ -93,9 +91,9 @@ function rollRandomStat(category) {
 /**
  * Build the human-readable item name.
  */
-function formatName(rarity, category) {
+function formatName(rarity, itemTypes) {
 	const cap = rarity.charAt(0).toUpperCase() + rarity.slice(1);
-	return `${cap} ${category}`;
+	return `${cap} ${itemTypes}`;
 }
 
 /**
@@ -118,7 +116,7 @@ function pickRarityByLevel(itemLevel) {
  * @returns {Item}
  */
 export function generateItemByLevel(itemLevel) {
-	const category = categories[Math.floor(Math.random() * categories.length)];
+	const category = itemTypes[Math.floor(Math.random() * itemTypes.length)];
 	const rarity = pickRarityByLevel(itemLevel);
 	const cost = BASE_PRICE * costMultipliers[rarity];
 
@@ -147,7 +145,7 @@ export function generateItemByLevel(itemLevel) {
 }
 
 export {
-	categories,
+	itemTypes,
 	rarityLevels,
 	costMultipliers,
 	BASE_PRICE,
@@ -156,3 +154,266 @@ export {
 	formatName,
 	pickRarityByLevel,
 };
+
+class ItemService {
+	static generateRandomItem(level) {
+		try {
+			console.log('Generating random item for level:', level);
+			const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+			console.log('Selected item type:', type);
+
+			let item;
+			switch (type) {
+				case 'weapon':
+					console.log('Generating weapon...');
+					item = this.generateWeapon(level);
+					break;
+				case 'armor':
+					console.log('Generating armor...');
+					item = this.generateArmor(level);
+					break;
+				case 'amulet':
+					console.log('Generating amulet...');
+					item = this.generateAmulet(level);
+					break;
+			}
+
+			console.log('Generated item:', item);
+			return item;
+		} catch (error) {
+			console.error('Error in generateRandomItem:', error);
+			throw error;
+		}
+	}
+
+	static generateWeapon(level) {
+		const rarity = this.determineRarity(level);
+		const stats = this.generateStats('weapon', rarity);
+
+		return {
+			id: `weapon_${Date.now()}`,
+			type: 'weapon',
+			name: `${rarity} Weapon`,
+			level: level,
+			rarity: rarity,
+			stats: stats,
+			description: this.generateDescription('weapon', rarity, stats)
+		};
+	}
+
+	static generateArmor(level) {
+		const rarity = this.determineRarity(level);
+		const stats = this.generateStats('armor', rarity);
+
+		return {
+			id: `armor_${Date.now()}`,
+			type: 'armor',
+			name: `${rarity} Armor`,
+			level: level,
+			rarity: rarity,
+			stats: stats,
+			description: this.generateDescription('armor', rarity, stats)
+		};
+	}
+
+	static generateAmulet(level) {
+		try {
+			console.log('Starting amulet generation...');
+			const rarity = this.determineRarity(level);
+			console.log('Determined rarity:', rarity);
+
+			console.log('Getting random spell...');
+			const spellKey = SpellService.getRandomSpell();
+			console.log('Got spell key:', spellKey);
+
+			console.log('Getting spell details...');
+			const spell = SpellService.getSpell(spellKey);
+			console.log('Got spell:', spell);
+
+			const stats = {
+				spell: spellKey,
+				...this.generateStats('amulet', rarity)
+			};
+			console.log('Generated stats:', stats);
+
+			const item = {
+				id: `amulet_${Date.now()}`,
+				type: 'amulet',
+				name: `${rarity} Amulet of ${spell.name}`,
+				level: level,
+				rarity: rarity,
+				stats: stats,
+				description: `Grants the ability to cast ${spell.name}: ${spell.description}`
+			};
+			console.log('Created amulet item:', item);
+			return item;
+		} catch (error) {
+			console.error('Error in generateAmulet:', error);
+			throw error;
+		}
+	}
+
+	static generateStats(itemType, rarity) {
+		const stats = {};
+		const statPool = this.getStatPool(itemType);
+
+		// Special handling for amulets
+		if (itemType === 'amulet') {
+			// Common amulets only have the spell stat (handled in generateAmulet)
+			if (rarity === 'common') {
+				return {};
+			}
+			// For higher rarities, add one or more additional stats
+			if (rarity === 'uncommon') {
+				// Add one random stat
+				const randomStat = statPool[Math.floor(Math.random() * statPool.length)];
+				stats[randomStat] = this.rollStatValue(randomStat);
+			} else if (rarity === 'rare') {
+				// Add all possible stats
+				statPool.forEach(stat => {
+					stats[stat] = this.rollStatValue(stat);
+				});
+			}
+			return stats;
+		}
+
+		// For other item types, use the normal stat generation
+		// Always add the primary stat
+		const primaryStat = statPool[0];
+		stats[primaryStat] = this.rollStatValue(primaryStat);
+
+		// Add additional stats based on rarity
+		if (rarity === 'uncommon') {
+			// Add one random secondary stat
+			const availableStats = statPool.filter(stat => !stats[stat]);
+			if (availableStats.length > 0) {
+				const randomStat = availableStats[Math.floor(Math.random() * availableStats.length)];
+				stats[randomStat] = this.rollStatValue(randomStat);
+			}
+		} else if (rarity === 'rare') {
+			// Add all possible stats
+			statPool.forEach(stat => {
+				if (!stats[stat]) {
+					stats[stat] = this.rollStatValue(stat);
+				}
+			});
+		}
+
+		return stats;
+	}
+
+	static getStatPool(itemType) {
+		switch (itemType) {
+			case 'weapon':
+				return ['damage', 'attackSpeed', 'attackPower'];
+			case 'armor':
+				return ['armor', 'health', 'vitality'];
+			case 'amulet':
+				return ['castSpeed', 'mana', 'willpower'];
+			default:
+				return [];
+		}
+	}
+
+	static rollStatValue(stat) {
+		const [min, max] = statRanges[stat];
+		const value = Math.random() * (max - min) + min;
+		return Math.round(value * 100) / 100; // Round to 2 decimal places
+	}
+
+	static determineRarity(level) {
+		const rarityChances = {
+			common: 0.6,
+			uncommon: 0.3,
+			rare: 0.1
+		};
+
+		// Increase rare chance with level
+		const levelBonus = Math.min(level * 0.02, 0.2); // Max 20% bonus
+		rarityChances.rare += levelBonus;
+		rarityChances.common -= levelBonus;
+
+		const roll = Math.random();
+		if (roll < rarityChances.rare) return 'rare';
+		if (roll < rarityChances.rare + rarityChances.uncommon) return 'uncommon';
+		return 'common';
+	}
+
+	static calculateStatValue(stat, level, rarity) {
+		const baseValue = statRanges[stat][0];
+		const maxValue = statRanges[stat][1];
+		const rarityMultiplier = {
+			common: 1,
+			uncommon: 1.5,
+			rare: 2
+		};
+
+		const levelBonus = level * 0.1;
+		const value = (baseValue + levelBonus) * rarityMultiplier[rarity];
+		return Math.min(value, maxValue);
+	}
+
+	static generateDescription(itemType, rarity, stats) {
+		const statDescriptions = Object.entries(stats)
+			.map(([stat, value]) => {
+				if (stat === 'spell') return null;
+				return `${stat}: ${value}`;
+			})
+			.filter(Boolean)
+			.join(', ');
+
+		return `A ${rarity} ${itemType} with ${statDescriptions}`;
+	}
+
+	static async equipItem(characterId, item) {
+		const character = await CharacterService.getCharacter(characterId);
+		if (!character) return false;
+
+		// Handle spell granting for amulets
+		if (item.type === 'amulet' && item.stats.spell) {
+			await CharacterService.addSpell(characterId, item.stats.spell);
+		}
+
+		// Add item to equipped items
+		character.equippedItems = character.equippedItems || [];
+		character.equippedItems.push(item.id);
+
+		// Update character stats
+		if (item.stats) {
+			const stats = { ...item.stats };
+			delete stats.spell; // Remove spell from stats as it's handled separately
+			await CharacterService.updateStats(characterId, stats);
+		}
+
+		await CharacterService.saveCharacter(character);
+		return true;
+	}
+
+	static async unequipItem(characterId, item) {
+		const character = await CharacterService.getCharacter(characterId);
+		if (!character) return false;
+
+		// Handle spell removal for amulets
+		if (item.type === 'amulet' && item.stats.spell) {
+			await CharacterService.removeSpell(characterId, item.stats.spell);
+		}
+
+		// Remove item from equipped items
+		character.equippedItems = character.equippedItems.filter(id => id !== item.id);
+
+		// Update character stats
+		if (item.stats) {
+			const stats = { ...item.stats };
+			delete stats.spell; // Remove spell from stats as it's handled separately
+			const negativeStats = Object.fromEntries(
+				Object.entries(stats).map(([key, value]) => [key, -value])
+			);
+			await CharacterService.updateStats(characterId, negativeStats);
+		}
+
+		await CharacterService.saveCharacter(character);
+		return true;
+	}
+}
+
+export default ItemService;

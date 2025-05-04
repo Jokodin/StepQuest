@@ -39,19 +39,23 @@ export default function BattleLogScreen({ route, navigation }) {
 		success = false,
 	} = entry;
 
-	// Group logs by timestamp
-	const groupedLogs = logs.reduce((acc, log) => {
-		if (!acc[log.timestamp]) {
-			acc[log.timestamp] = [];
+	// Group logs by timestamp and ensure unique keys
+	const groupedLogs = logs.reduce((acc, log, index) => {
+		const key = `${log.timestamp}-${log.actor}-${index}`;
+		if (!acc[key]) {
+			acc[key] = {
+				timestamp: log.timestamp,
+				entries: []
+			};
 		}
-		acc[log.timestamp].push(log);
+		acc[key].entries.push(log);
 		return acc;
 	}, {});
 
 	// Convert grouped logs to array for FlatList
-	const logGroups = Object.entries(groupedLogs).map(([timestamp, entries]) => ({
-		timestamp: parseInt(timestamp),
-		entries
+	const logGroups = Object.entries(groupedLogs).map(([key, value]) => ({
+		...value,
+		key // Include the unique key in the item
 	}));
 
 	// Sort groups by timestamp
@@ -99,46 +103,43 @@ export default function BattleLogScreen({ route, navigation }) {
 	};
 
 	// Render a group of simultaneous actions
-	const renderLogGroup = ({ item: group }) => {
-		const isSimultaneous = group.entries.length > 1;
-		const playerEntry = group.entries.find(entry => entry.actor === heroName);
-		const enemyEntry = group.entries.find(entry => entry.actor !== heroName && entry.actor !== 'System');
-		const systemEntry = group.entries.find(entry => entry.actor === 'System');
-
+	const renderLogGroup = ({ item }) => {
 		return (
-			<View style={[
-				styles.entryRow,
-				isSimultaneous && styles.simultaneousRow
-			]}>
-				{systemEntry && (
-					<View style={[styles.entryContainer, styles.systemEntry]}>
-						<ThemedText style={[styles.entryText, { textAlign: 'center' }]}>
-							{systemEntry.displayText}
+			<View style={styles.entryContainer}>
+				{item.entries.map((log, index) => (
+					<View
+						key={`entry-${item.timestamp}-${log.actor}-${index}`}
+						style={[
+							styles.entryRow,
+							log.actor === 'System' ? styles.systemEntry :
+								log.actor === heroName ? styles.playerEntry : styles.enemyEntry
+						]}
+					>
+						{log.actor === heroName && (
+							<FontAwesome5
+								name="user"
+								size={16}
+								color={colors.primary}
+								style={styles.entryIcon}
+							/>
+						)}
+						<ThemedText style={[
+							styles.entryText,
+							log.actor === heroName ? styles.entryTextPlayer :
+								log.actor === 'System' ? styles.systemText : styles.entryTextEnemy
+						]}>
+							{log.displayText}
 						</ThemedText>
+						{log.actor !== heroName && log.actor !== 'System' && (
+							<FontAwesome5
+								name="skull"
+								size={16}
+								color={colors.error}
+								style={styles.entryIcon}
+							/>
+						)}
 					</View>
-				)}
-				{playerEntry && (
-					<View
-						style={[
-							styles.entryContainer,
-							styles.playerEntry,
-							isSimultaneous && styles.simultaneousEntry
-						]}
-					>
-						{renderLogEntry(playerEntry, true)}
-					</View>
-				)}
-				{enemyEntry && (
-					<View
-						style={[
-							styles.entryContainer,
-							styles.enemyEntry,
-							isSimultaneous && styles.simultaneousEntry
-						]}
-					>
-						{renderLogEntry(enemyEntry, false)}
-					</View>
-				)}
+				))}
 			</View>
 		);
 	};
@@ -168,19 +169,18 @@ export default function BattleLogScreen({ route, navigation }) {
 				</View>
 
 				{/* Action-by-action log */}
-				<View style={styles.logsContainer}>
-					<FlatList
-						data={logGroups}
-						keyExtractor={(item) => String(item.timestamp)}
-						renderItem={renderLogGroup}
-						contentContainerStyle={{ paddingHorizontal: 16 }}
-						ListEmptyComponent={
-							<View style={styles.entryRow}>
-								<ThemedText>No detailed logs available.</ThemedText>
-							</View>
-						}
-					/>
-				</View>
+				<FlatList
+					data={logGroups}
+					keyExtractor={(item) => item.key}
+					renderItem={renderLogGroup}
+					contentContainerStyle={styles.logsContainer}
+					style={{ flex: 1 }}
+					ListEmptyComponent={
+						<View style={styles.entryRow}>
+							<ThemedText>No detailed logs available.</ThemedText>
+						</View>
+					}
+				/>
 			</SafeAreaView>
 		</ScreenLayout>
 	);

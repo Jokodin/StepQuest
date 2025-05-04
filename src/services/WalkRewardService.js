@@ -13,7 +13,7 @@ const MAX_LOG_ENTRIES = 50;
 
 // Define themed monster lists per area
 const areaThemes = {
-	1: ['Skeleton', 'Zombie', 'Ghoul', 'Vampire'],
+	1: ['Skeleton'],
 	2: ['Slime', 'Evil Tree', 'Fungus Monster', 'Gelatinous Cube'],
 	3: ['Pirate Ghost', 'Cursed Parrot', 'Kraken Spawn', 'Drowned Sailor'],
 	4: ['Fire Imp', 'Lava Golem', 'Ash Wraith', 'Magma Serpent'],
@@ -29,7 +29,6 @@ export const areaNames = {
 
 class WalkRewardService {
 	constructor() {
-		console.log("ctor");
 		this.logs = [];
 		this.listeners = new Set();
 		this.currentArea = 1;
@@ -43,11 +42,11 @@ class WalkRewardService {
 	}
 
 	async _init() {
-		// console.log('[WalkRewardService] Initializing');
+		// //console.log('[WalkRewardService] Initializing');
 		const rawLogs = await AsyncStorage.getItem(LOGS_KEY);
-		// console.log('[WalkRewardService] Raw logs from storage:', rawLogs);
+		// //console.log('[WalkRewardService] Raw logs from storage:', rawLogs);
 		this.logs = rawLogs ? JSON.parse(rawLogs) : [];
-		// console.log('[WalkRewardService] Parsed logs:', this.logs);
+		// //console.log('[WalkRewardService] Parsed logs:', this.logs);
 
 		if (!(await AsyncStorage.getItem(BOXES_KEY))) {
 			await AsyncStorage.setItem(BOXES_KEY, JSON.stringify([]));
@@ -64,7 +63,7 @@ class WalkRewardService {
 
 			const check = () => {
 				const lifetime = StepServiceInstance.getLifetime();
-				console.log('[WalkRewardService] Checking StepService lifetime:', lifetime);
+				////console.log('[WalkRewardService] Checking StepService lifetime:', lifetime);
 
 				// Initialize with whatever value we get, even if it's 0
 				this.lastLifetimeSteps = lifetime;
@@ -82,9 +81,9 @@ class WalkRewardService {
 
 	// Call this when app becomes active
 	async startSession() {
-		console.log('[WalkRewardService] Starting session');
+		//console.log('[WalkRewardService] Starting session');
 		if (!this.isInitialized) {
-			console.log('[WalkRewardService] Not initialized yet, waiting...');
+			//console.log('[WalkRewardService] Not initialized yet, waiting...');
 			return;
 		}
 
@@ -92,16 +91,14 @@ class WalkRewardService {
 		const newSteps = currentLifetimeSteps - this.lastLifetimeSteps;
 
 		if (newSteps > 0) {
-			console.log(`[WalkRewardService] Processing ${newSteps} new steps since last check`);
+			//console.log(`[WalkRewardService] Processing ${newSteps} new steps since last check`);
 			await this.processSteps(newSteps);
-		} else {
-			console.log('[WalkRewardService] No new steps to process');
 		}
 	}
 
 	// Call this when app becomes inactive
 	endSession() {
-		console.log('[WalkRewardService] Ending session');
+		//console.log('[WalkRewardService] Ending session');
 		if (!this.isInitialized) return;
 
 		this.lastLifetimeSteps = StepServiceInstance.getLifetime();
@@ -111,9 +108,9 @@ class WalkRewardService {
 	async processSteps(newSteps) {
 		if (!this.isInitialized) return;
 
-		console.log(`[WalkRewardService] Processing ${newSteps} new steps (current area steps: ${this.stepsInArea})`);
+		//console.log(`[WalkRewardService] Processing ${newSteps} new steps (current area steps: ${this.stepsInArea})`);
 		if (newSteps < STEP_THRESHOLD) {
-			console.log('[WalkRewardService] Not enough steps for a battle');
+			//console.log('[WalkRewardService] Not enough steps for a battle');
 			return;
 		}
 
@@ -122,7 +119,7 @@ class WalkRewardService {
 			this.stepsInArea += STEP_THRESHOLD;
 			const isBoss = this.stepsInArea >= BOSS_THRESHOLD && (this.stepsInArea - STEP_THRESHOLD) < BOSS_THRESHOLD;
 
-			console.log(`[WalkRewardService] Triggering battle at ${this.stepsInArea} steps (${isBoss ? 'BOSS' : 'regular'})`);
+			//console.log(`[WalkRewardService] Triggering battle at ${this.stepsInArea} steps (${isBoss ? 'BOSS' : 'regular'})`);
 			const battleLog = await this._runBattle(this.stepsInArea, isBoss);
 			this.logs = [battleLog, ...this.logs].slice(0, MAX_LOG_ENTRIES);
 			await AsyncStorage.setItem(LOGS_KEY, JSON.stringify(this.logs));
@@ -131,11 +128,11 @@ class WalkRewardService {
 
 			if (!battleLog.success) {
 				// On any battle loss, reset area progress
-				console.log('[WalkRewardService] Battle lost, resetting area progress');
+				//console.log('[WalkRewardService] Battle lost, resetting area progress');
 				this.stepsInArea = 0;
 			} else if (isBoss) {
 				// On boss victory, move to next area
-				console.log('[WalkRewardService] Boss defeated, moving to next area');
+				//console.log('[WalkRewardService] Boss defeated, moving to next area');
 				this.stepsInArea = 0;
 			}
 		}
@@ -148,18 +145,17 @@ class WalkRewardService {
 
 		const newSteps = lifetime - this.lastLifetimeSteps;
 		if (newSteps <= 0) {
-			console.log('[WalkRewardService] No new steps to process');
 			return;
 		}
 
-		console.log(`[WalkRewardService] Received ${newSteps} new steps`);
+		//console.log(`[WalkRewardService] Received ${newSteps} new steps`);
 		await this.processSteps(newSteps);
 		this.lastLifetimeSteps = lifetime;
 		await AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
 	}
 
 	async _runBattle(stepCountAtTrigger, isBoss) {
-		console.log(`[WalkRewardService] Running ${isBoss ? 'boss' : 'regular'} battle in area ${this.currentArea}`);
+		//console.log(`[WalkRewardService] Running ${isBoss ? 'boss' : 'regular'} battle in area ${this.currentArea}`);
 		const hero = CharacterService.getCurrentCharacter();
 		let monsters;
 		if (isBoss) {
@@ -175,7 +171,7 @@ class WalkRewardService {
 		}
 
 		const { logs, success } = await BattleService.simulateBattle(hero, monsters);
-		console.log(`[WalkRewardService] Battle ${success ? 'won' : 'lost'} against ${monsters.map(m => m.id).join(', ')}`);
+		//console.log(`[WalkRewardService] Battle ${success ? 'won' : 'lost'} against ${monsters.map(m => m.id).join(', ')}`);
 
 		const entry = {
 			area: this.currentArea,
@@ -187,7 +183,7 @@ class WalkRewardService {
 			isBoss,
 		};
 
-		console.log('[WalkRewardService] Created battle entry:', entry);
+		//console.log('[WalkRewardService] Created battle entry:', entry);
 
 		if (success) {
 			const rawBoxes = await AsyncStorage.getItem(BOXES_KEY);
@@ -198,7 +194,7 @@ class WalkRewardService {
 			if (isBoss) {
 				this.currentArea++;
 				await AsyncStorage.setItem(AREA_KEY, String(this.currentArea));
-				console.log('[WalkRewardService] Boss defeated, moving to area', this.currentArea);
+				//console.log('[WalkRewardService] Boss defeated, moving to area', this.currentArea);
 			}
 		}
 
@@ -214,7 +210,7 @@ class WalkRewardService {
 	}
 
 	async reset() {
-		console.log('[WalkRewardService] Resetting service');
+		//console.log('[WalkRewardService] Resetting service');
 		this.logs = [];
 		await AsyncStorage.removeItem(LOGS_KEY);
 		this.currentArea = 1;
