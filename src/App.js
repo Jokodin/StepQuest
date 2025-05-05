@@ -19,6 +19,7 @@ import LogsScreen from './screens/LogsScreen/LogsScreen';
 import '@/services/WalkRewardService';
 import '@/services/StepService';
 import QuestsScreen from './screens/QuestsScreen/QuestsScreen';
+import SkillScreen from './screens/SkillScreen/SkillScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -56,7 +57,7 @@ export default function App() {
 
 			{/* ensure the OS bar is shown and your content sits below it */}
 			<StatusBar
-				translucent={false}             // don’t draw behind it
+				translucent={false}             // don't draw behind it
 				backgroundColor="transparent"   // on Android, make it match your header
 				barStyle="dark-content"         // or "light-content" to suit your theme
 			/>
@@ -69,6 +70,7 @@ export default function App() {
 				<Stack.Screen name="LogDetails" component={BattleLogScreen} />
 				<Stack.Screen name="Boxes" component={RewardsScreen} />
 				<Stack.Screen name="Quests" component={QuestsScreen} />
+				<Stack.Screen name="Skills" component={SkillScreen} />
 			</Stack.Navigator>
 		</NavigationContainer>
 	);
