@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CharacterService from '@/services/CharacterService';
 import BattleService from '@/services/BattleService';
 import { StepServiceInstance } from '@/services/StepService';
+import QuestService from '@/services/QuestService';
 
 const LOGS_KEY = 'walk_battle_logs';
 const BOXES_KEY = 'walk_reward_boxes';
@@ -13,7 +14,7 @@ const MAX_LOG_ENTRIES = 50;
 
 // Define themed monster lists per area
 const areaThemes = {
-	1: ['Skeleton'],
+	1: ['Skeleton', 'Ghost', 'Zombie', 'Wraith'],
 	2: ['Slime', 'Evil Tree', 'Fungus Monster', 'Gelatinous Cube'],
 	3: ['Pirate Ghost', 'Cursed Parrot', 'Kraken Spawn', 'Drowned Sailor'],
 	4: ['Fire Imp', 'Lava Golem', 'Ash Wraith', 'Magma Serpent'],
@@ -152,6 +153,13 @@ class WalkRewardService {
 		await this.processSteps(newSteps);
 		this.lastLifetimeSteps = lifetime;
 		await AsyncStorage.setItem(LAST_STEPS_KEY, String(this.lastLifetimeSteps));
+
+		// Update quest progress for both daily and hourly quests
+		try {
+			await QuestService.updateQuestProgress(lifetime);
+		} catch (error) {
+			console.error('Error updating quest progress:', error);
+		}
 	}
 
 	async _runBattle(stepCountAtTrigger, isBoss) {

@@ -100,7 +100,7 @@ export default function LogsScreen({ navigation }) {
 				]}
 				underlayColor={styles.logRow.underlayColor}
 				onPress={() =>
-					navigation.navigate('BattleLog', {
+					navigation.navigate('LogDetails', {
 						logType: 'walk',
 						logIndex: index,
 					})

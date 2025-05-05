@@ -18,6 +18,7 @@ import { StatusBar } from 'react-native';
 import LogsScreen from './screens/LogsScreen/LogsScreen';
 import '@/services/WalkRewardService';
 import '@/services/StepService';
+import QuestsScreen from './screens/QuestsScreen/QuestsScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -64,9 +65,10 @@ export default function App() {
 				<Stack.Screen name="Character" component={CharacterScreen} />
 				<Stack.Screen name="Items" component={InventoryScreen} />
 				{/* <Stack.Screen name="Store" component={StoreScreen} /> */}
-				<Stack.Screen name="Logs" component={LogsScreen} />
-				<Stack.Screen name="BattleLog" component={BattleLogScreen} />
+				<Stack.Screen name="Battle Logs" component={LogsScreen} />
+				<Stack.Screen name="LogDetails" component={BattleLogScreen} />
 				<Stack.Screen name="Boxes" component={RewardsScreen} />
+				<Stack.Screen name="Quests" component={QuestsScreen} />
 			</Stack.Navigator>
 		</NavigationContainer>
 	);

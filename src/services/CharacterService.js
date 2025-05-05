@@ -38,7 +38,7 @@ class CharacterService {
 			createdAt: Date.now(),
 			name: 'Joko',
 			stats: {
-				health: 10,
+				health: 100,
 				damage: 1,
 				attackPower: 1,
 				attackSpeed: 1,
@@ -228,10 +228,6 @@ class CharacterService {
 			if (!parsedCharacter.spells) {
 				parsedCharacter.spells = [];
 			}
-			// Ensure spell cooldowns object exists
-			if (!parsedCharacter.spellCooldowns) {
-				parsedCharacter.spellCooldowns = {};
-			}
 			return parsedCharacter;
 		} catch (error) {
 			console.error('Error getting character:', error);
@@ -244,10 +240,6 @@ class CharacterService {
 			// Ensure spells array exists
 			if (!character.spells) {
 				character.spells = [];
-			}
-			// Ensure spell cooldowns object exists
-			if (!character.spellCooldowns) {
-				character.spellCooldowns = {};
 			}
 			await AsyncStorage.setItem(`character_${character.id}`, JSON.stringify(character));
 		} catch (error) {
@@ -262,7 +254,6 @@ class CharacterService {
 
 			if (!character.spells.includes(spellKey)) {
 				character.spells.push(spellKey);
-				character.spellCooldowns[spellKey] = 0; // Initialize cooldown
 				await this.saveCharacter(character);
 				return true;
 			}
@@ -281,27 +272,12 @@ class CharacterService {
 			const index = character.spells.indexOf(spellKey);
 			if (index !== -1) {
 				character.spells.splice(index, 1);
-				delete character.spellCooldowns[spellKey];
 				await this.saveCharacter(character);
 				return true;
 			}
 			return false;
 		} catch (error) {
 			console.error('Error removing spell:', error);
-			return false;
-		}
-	}
-
-	static async updateSpellCooldown(characterId, spellKey, lastCastTime) {
-		try {
-			const character = await this.getCharacter(characterId);
-			if (!character) return false;
-
-			character.spellCooldowns[spellKey] = lastCastTime;
-			await this.saveCharacter(character);
-			return true;
-		} catch (error) {
-			console.error('Error updating spell cooldown:', error);
 			return false;
 		}
 	}

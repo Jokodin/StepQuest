@@ -12,6 +12,7 @@ const SpellsTab = ({ character }) => {
 			try {
 				const eqRaw = await AsyncStorage.getItem('equipped_items');
 				const eqArr = eqRaw ? JSON.parse(eqRaw) : [];
+				console.log('Loaded equipped items:', eqArr);
 				setEquippedItems(eqArr);
 			} catch (error) {
 				console.error('Error loading equipped items:', error);
@@ -26,17 +27,22 @@ const SpellsTab = ({ character }) => {
 
 		// Add character's spells
 		if (character?.spells) {
+			console.log('Character spells:', character.spells);
 			character.spells.forEach(spell => spells.add(spell));
 		}
 
 		// Add spells from equipped amulets
 		equippedItems.forEach(item => {
+			console.log('Checking item:', item);
 			if (item.type === 'amulet' && item.stats?.spell) {
+				console.log('Found spell in amulet:', item.stats.spell);
 				spells.add(item.stats.spell);
 			}
 		});
 
-		return Array.from(spells);
+		const spellArray = Array.from(spells);
+		console.log('All spells:', spellArray);
+		return spellArray;
 	};
 
 	const spells = getAllSpells();
@@ -53,6 +59,7 @@ const SpellsTab = ({ character }) => {
 		<ScrollView style={styles.container}>
 			{spells.map((spellKey, index) => {
 				const spell = SpellService.getSpell(spellKey);
+				console.log('Rendering spell:', spellKey, spell);
 				if (!spell) return null;
 
 				return (
@@ -69,7 +76,6 @@ const SpellsTab = ({ character }) => {
 							{spell.healing && (
 								<Text style={styles.statText}>Healing: {spell.healing}</Text>
 							)}
-							<Text style={styles.statText}>Cooldown: {spell.cooldown}s</Text>
 						</View>
 					</View>
 				);

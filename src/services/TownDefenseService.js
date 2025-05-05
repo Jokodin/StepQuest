@@ -1,7 +1,6 @@
 // src/services/TownDefenseService.js
 
 import CharacterService from '@/services/CharacterService';
-import BattleService from '@/services/BattleService';
 
 class TownDefenseService {
 	constructor({ attackIntervalMs = 60 * 1000 } = {}) {
@@ -86,12 +85,6 @@ class TownDefenseService {
 		const monsters = Array.from({ length: count }, (_, i) => ({
 			id: `${type} #${i + 1}`, level: 1
 		}));
-
-		// simulate
-		const { logs, success } = await BattleService.simulateBattle(
-			hero,  // now passing full heroChar
-			monsters
-		);
 
 		// adjust threat
 		this.threatLevel = success

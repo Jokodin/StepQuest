@@ -7,11 +7,13 @@ import {
 	Text,
 	TouchableOpacity,
 } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import ScreenLayout from '@/components/ScreenLayout';
 import CharacterService from '@/services/CharacterService';
 import SpellsTab from './SpellsTab';
 import StatsTab from './StatsTab';
 import styles from './CharacterScreen.styles';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Utility to format stat labels
 const formatLabel = key => key
@@ -21,15 +23,25 @@ const formatLabel = key => key
 const CharacterScreen = () => {
 	const [character, setCharacter] = useState(null);
 	const [activeTab, setActiveTab] = useState('stats');
+	const isFocused = useIsFocused();
 
 	useEffect(() => {
-		loadCharacter();
-	}, []);
+		if (isFocused) {
+			loadCharacter();
+		}
+	}, [isFocused]);
 
 	const loadCharacter = async () => {
 		try {
-			const currentCharacter = CharacterService.getCurrentCharacter();
-			setCharacter(currentCharacter);
+			// Force a refresh by getting the character from AsyncStorage
+			const stored = await AsyncStorage.getItem('currentCharacter');
+			if (stored) {
+				const currentCharacter = JSON.parse(stored);
+				setCharacter(currentCharacter);
+			} else {
+				const currentCharacter = CharacterService.getCurrentCharacter();
+				setCharacter(currentCharacter);
+			}
 		} catch (error) {
 			console.error('Error loading character:', error);
 		}

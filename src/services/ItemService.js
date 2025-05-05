@@ -3,6 +3,7 @@ import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 import SpellService from './SpellService';
 import CharacterService from './CharacterService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Categories list
 const itemTypes = [
@@ -366,53 +367,37 @@ class ItemService {
 	}
 
 	static async equipItem(characterId, item) {
-		const character = await CharacterService.getCharacter(characterId);
-		if (!character) return false;
+		try {
+			// Get current equipped items
+			const equippedRaw = await AsyncStorage.getItem('equipped_items');
+			const equippedItems = equippedRaw ? JSON.parse(equippedRaw) : [];
 
-		// Handle spell granting for amulets
-		if (item.type === 'amulet' && item.stats.spell) {
-			await CharacterService.addSpell(characterId, item.stats.spell);
+			// Add the new item
+			const newEquipped = [...equippedItems, item];
+			await AsyncStorage.setItem('equipped_items', JSON.stringify(newEquipped));
+
+			return true;
+		} catch (error) {
+			console.error('Error equipping item:', error);
+			return false;
 		}
-
-		// Add item to equipped items
-		character.equippedItems = character.equippedItems || [];
-		character.equippedItems.push(item.id);
-
-		// Update character stats
-		if (item.stats) {
-			const stats = { ...item.stats };
-			delete stats.spell; // Remove spell from stats as it's handled separately
-			await CharacterService.updateStats(characterId, stats);
-		}
-
-		await CharacterService.saveCharacter(character);
-		return true;
 	}
 
 	static async unequipItem(characterId, item) {
-		const character = await CharacterService.getCharacter(characterId);
-		if (!character) return false;
+		try {
+			// Get current equipped items
+			const equippedRaw = await AsyncStorage.getItem('equipped_items');
+			const equippedItems = equippedRaw ? JSON.parse(equippedRaw) : [];
 
-		// Handle spell removal for amulets
-		if (item.type === 'amulet' && item.stats.spell) {
-			await CharacterService.removeSpell(characterId, item.stats.spell);
+			// Remove the item
+			const newEquipped = equippedItems.filter(eq => eq.id !== item.id);
+			await AsyncStorage.setItem('equipped_items', JSON.stringify(newEquipped));
+
+			return true;
+		} catch (error) {
+			console.error('Error unequipping item:', error);
+			return false;
 		}
-
-		// Remove item from equipped items
-		character.equippedItems = character.equippedItems.filter(id => id !== item.id);
-
-		// Update character stats
-		if (item.stats) {
-			const stats = { ...item.stats };
-			delete stats.spell; // Remove spell from stats as it's handled separately
-			const negativeStats = Object.fromEntries(
-				Object.entries(stats).map(([key, value]) => [key, -value])
-			);
-			await CharacterService.updateStats(characterId, negativeStats);
-		}
-
-		await CharacterService.saveCharacter(character);
-		return true;
 	}
 }
 

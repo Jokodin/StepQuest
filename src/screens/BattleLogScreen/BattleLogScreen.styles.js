@@ -34,52 +34,66 @@ export default StyleSheet.create({
 		margin: 16,
 	},
 	metaText: {
-		marginBottom: 4,
+		fontSize: 16,
+		marginBottom: 8,
 	},
 	entryRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		justifyContent: 'center',
-		padding: 6,
-		borderRadius: 6,
-		marginVertical: 2,
-		borderWidth: 1,
-		borderColor: 'white',
+		marginBottom: 8,
+	},
+	entryContainer: {
+		marginBottom: 16,
+	},
+	entryContent: {
+		flex: 1,
+	},
+	entryTextContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 4,
+	},
+	entryIcon: {
+		marginHorizontal: 8,
+	},
+	entryText: {
+		flex: 1,
+		fontSize: 16,
+	},
+	entryTextPlayer: {
+		color: colors.primary,
+	},
+	entryTextEnemy: {
+		color: colors.error,
+	},
+	systemText: {
+		color: colors.text,
+		fontStyle: 'italic',
+	},
+	playerEntry: {
+		backgroundColor: colors.primary + '20',
+		padding: 8,
+		borderRadius: 8,
+	},
+	enemyEntry: {
+		backgroundColor: colors.error + '20',
+		padding: 8,
+		borderRadius: 8,
+	},
+	systemEntry: {
+		backgroundColor: colors.background,
+		padding: 8,
+		borderRadius: 8,
 	},
 	simultaneousRow: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		width: '100%',
 	},
-	entryContainer: {
-		width: '100%',
-		backgroundColor: colors.backgroundSecondary,
-		padding: 8,
-		marginVertical: 2,
-		borderRadius: 8,
-	},
-	systemEntry: {
-		backgroundColor: colors.backgroundSecondary + '80',
-		justifyContent: 'center',
-		borderColor: colors.text,
-	},
-	playerEntry: {
-		backgroundColor: colors.primary + '15',
-		borderColor: colors.primary,
-	},
-	enemyEntry: {
-		backgroundColor: colors.error + '15',
-		borderColor: colors.error,
-	},
 	simultaneousEntry: {
 		width: '48%',
 		backgroundColor: colors.backgroundSecondary,
 		alignItems: 'center',
-	},
-	entryContent: {
-		flex: 1,
-		padding: 8,
-		width: '100%',
 	},
 	hpBarContainer: {
 		width: '100%',
@@ -95,43 +109,105 @@ export default StyleSheet.create({
 		height: '100%',
 		backgroundColor: colors.primary,
 	},
-	entryTextContainer: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		width: '100%',
-		paddingHorizontal: 8,
-	},
-	entryText: {
-		flex: 1,
-		fontSize: 14,
-		color: colors.text,
-		textAlign: 'center',
-	},
-	entryTextPlayer: {
-		color: colors.primary,
-		fontWeight: 'bold',
-		textAlign: 'center',
-	},
-	entryTextEnemy: {
-		color: colors.error,
-		fontWeight: 'bold',
-		textAlign: 'center',
-	},
-	entryIcon: {
-		marginHorizontal: 8,
-	},
-	systemText: {
-		color: colors.text,
-		fontWeight: 'bold',
-		fontSize: 16,
-		textAlign: 'center',
-	},
 	hpText: {
 		color: colors.text,
 		fontSize: 12,
 		textAlign: 'center',
 		marginTop: 4,
 		fontWeight: 'bold',
+	},
+	// New styles for tabs
+	tabsContainer: {
+		flexDirection: 'row',
+		borderBottomWidth: 1,
+		borderBottomColor: colors.border,
+	},
+	tab: {
+		flex: 1,
+		padding: 16,
+		alignItems: 'center',
+	},
+	activeTab: {
+		borderBottomWidth: 2,
+		borderBottomColor: colors.primary,
+	},
+	tabText: {
+		fontSize: 16,
+		color: colors.text,
+	},
+	activeTabText: {
+		color: colors.primary,
+		fontWeight: 'bold',
+	},
+	// Styles for replay tab
+	replayContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		padding: 16,
+	},
+	replayText: {
+		fontSize: 18,
+		color: colors.text,
+		textAlign: 'center',
+	},
+	// Battle replay styles
+	battleField: {
+		flex: 1,
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		padding: 16,
+		width: '100%',
+	},
+	combatantContainer: {
+		flex: 1,
+		marginHorizontal: 8,
+	},
+	combatantInfo: {
+		backgroundColor: colors.backgroundSecondary,
+		padding: 16,
+		borderRadius: 8,
+		alignItems: 'center',
+		width: '100%',
+	},
+	combatantName: {
+		fontSize: 18,
+		fontWeight: 'bold',
+		marginBottom: 8,
+		color: colors.text,
+	},
+	barContainer: {
+		width: '100%',
+		marginVertical: 4,
+	},
+	manaBarBackground: {
+		height: 8,
+		backgroundColor: colors.background,
+		borderRadius: 4,
+		overflow: 'hidden',
+	},
+	manaBar: {
+		height: '100%',
+		backgroundColor: colors.primary,
+	},
+	manaText: {
+		color: colors.text,
+		fontSize: 12,
+		textAlign: 'center',
+		marginTop: 4,
+	},
+	cooldownBarBackground: {
+		height: 4,
+		backgroundColor: colors.background,
+		borderRadius: 2,
+		overflow: 'hidden',
+	},
+	cooldownBar: {
+		height: '100%',
+		backgroundColor: colors.primary,
+	},
+	enemiesContainer: {
+		flex: 1,
+		marginLeft: 16,
 	},
 });
