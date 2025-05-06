@@ -49,6 +49,7 @@ class QuestService {
 		const attributes = ['strength', 'intelligence', 'dexterity', 'vitality', 'willpower'];
 		const randomAttribute = attributes[Math.floor(Math.random() * attributes.length)];
 		const stepGoal = Math.floor(Math.random() * 1000) + 1000; // Random between 1000-2000
+		//const stepGoal = Math.floor(Math.random() * 5) + 1;
 
 		const quest = {
 			id: Date.now().toString(),

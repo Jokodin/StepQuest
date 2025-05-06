@@ -10,15 +10,12 @@ import {
 import { ChevronRight } from 'lucide-react-native';
 import ThemedText from '@/components/ThemedText';
 import ScreenLayout from '@/components/ScreenLayout';
-import WalkRewardService, { BOSS_THRESHOLD, areaNames } from '@/services/WalkRewardService';
+import WalkRewardService, { BOSS_THRESHOLD, areaNames, STEP_THRESHOLD } from '@/services/WalkRewardService';
 import { StepServiceInstance } from '@/services/StepService';
 import { useIsFocused } from '@react-navigation/native';
 import { colors } from '@/constants/theme';
 import styles from '../LogsScreen/LogsScreen.styles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import TownDefenseService from '@/services/TownDefenseService';
-
-const STEP_THRESHOLD = 5;
 
 export default function LogsScreen({ navigation }) {
 	const isFocused = useIsFocused();
@@ -67,8 +64,8 @@ export default function LogsScreen({ navigation }) {
 			await WalkRewardService.processSteps(STEP_THRESHOLD);
 			// Refresh to show the new battle
 			refresh();
-		} catch (e) {
-			console.warn('Test battle failed:', e);
+		} catch (error) {
+			console.error('Error running test battle:', error);
 		}
 	};
 
@@ -77,7 +74,7 @@ export default function LogsScreen({ navigation }) {
 			{!item.success && (
 				<View style={styles.resetNotice}>
 					<ThemedText style={styles.resetText}>
-						⚠️ Area progress reset
+						💀 You died - Area progress reset 💀
 					</ThemedText>
 				</View>
 			)}
@@ -93,13 +90,15 @@ export default function LogsScreen({ navigation }) {
 					styles.logRow,
 					{
 						borderStartWidth: 4,
-						borderStartColor: item.success
-							? colors.primary
-							: colors.error,
+						borderStartColor: item.isItemBox
+							? colors.secondary
+							: item.success
+								? colors.primary
+								: colors.error,
 					},
 				]}
 				underlayColor={styles.logRow.underlayColor}
-				onPress={() =>
+				onPress={item.isItemBox ? undefined : () =>
 					navigation.navigate('LogDetails', {
 						logType: 'walk',
 						logIndex: index,
@@ -107,10 +106,27 @@ export default function LogsScreen({ navigation }) {
 				}
 			>
 				<View style={styles.logRowContent}>
-					<ThemedText>
-						{item.success ? 'Win' : 'Loss'} – {item.monsters.join(', ')}
-					</ThemedText>
-					<ChevronRight size={20} color={colors.textSecondary} />
+					<View style={styles.logRowTextContainer}>
+						<View style={styles.monsterAndExpContainer}>
+							{item.isItemBox ? (
+								<ThemedText>📦 Item Box Found</ThemedText>
+							) : (
+								<>
+									<ThemedText>
+										{item.monsters.map(m => m.id).join(', ')}
+									</ThemedText>
+									{item.success && (
+										<ThemedText style={styles.expText}>
+											+{item.isBoss
+												? (item.area * 5 - 1) * 5 + 10
+												: (item.monsters[0].level - 1) * 5 + 10} XP
+										</ThemedText>
+									)}
+								</>
+							)}
+						</View>
+					</View>
+					{!item.isItemBox && <ChevronRight size={20} color={colors.textSecondary} />}
 				</View>
 			</TouchableHighlight>
 		</View>

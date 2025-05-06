@@ -12,7 +12,7 @@ const SpellsTab = ({ character }) => {
 			try {
 				const eqRaw = await AsyncStorage.getItem('equipped_items');
 				const eqArr = eqRaw ? JSON.parse(eqRaw) : [];
-				console.log('Loaded equipped items:', eqArr);
+				//console.log('Loaded equipped items:', eqArr);
 				setEquippedItems(eqArr);
 			} catch (error) {
 				console.error('Error loading equipped items:', error);
@@ -27,21 +27,21 @@ const SpellsTab = ({ character }) => {
 
 		// Add character's spells
 		if (character?.spells) {
-			console.log('Character spells:', character.spells);
+			//console.log('Character spells:', character.spells);
 			character.spells.forEach(spell => spells.add(spell));
 		}
 
 		// Add spells from equipped amulets
 		equippedItems.forEach(item => {
-			console.log('Checking item:', item);
+			//console.log('Checking item:', item);
 			if (item.type === 'amulet' && item.stats?.spell) {
-				console.log('Found spell in amulet:', item.stats.spell);
+				//console.log('Found spell in amulet:', item.stats.spell);
 				spells.add(item.stats.spell);
 			}
 		});
 
 		const spellArray = Array.from(spells);
-		console.log('All spells:', spellArray);
+		//console.log('All spells:', spellArray);
 		return spellArray;
 	};
 
@@ -59,7 +59,7 @@ const SpellsTab = ({ character }) => {
 		<ScrollView style={styles.container}>
 			{spells.map((spellKey, index) => {
 				const spell = SpellService.getSpell(spellKey);
-				console.log('Rendering spell:', spellKey, spell);
+				//console.log('Rendering spell:', spellKey, spell);
 				if (!spell) return null;
 
 				return (

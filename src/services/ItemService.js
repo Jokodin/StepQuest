@@ -8,8 +8,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 // Categories list
 const itemTypes = [
 	'weapon',
-	// 'armor',
-	// 'gloves',
+	'armor',
+	'gloves',
 	'amulet',
 ];
 
@@ -43,8 +43,7 @@ const intrinsicStatsGenerators = {
 	Weapon: () => {
 		const [min, max] = statRanges.damage;
 		const raw = Math.random() * (max - min) + min;
-		const fixed = Math.round(raw * 100) / 100;
-		return { damage: fixed };
+		return { damage: Number(raw.toFixed(1)) };
 	},
 	// Shield: () => {
 	// 	const [min, max] = statRanges.blockChance;
@@ -54,20 +53,17 @@ const intrinsicStatsGenerators = {
 	Armor: () => {
 		const [min, max] = statRanges.armor;
 		const raw = Math.random() * (max - min) + min;
-		const fixed = Math.round(raw * 10) / 10;
-		return { armor: fixed };
+		return { armor: Number(raw.toFixed(1)) };
 	},
 	Gloves: () => {
 		const [min, max] = statRanges.attackSpeed;
 		const raw = Math.random() * (max - min) + min;
-		const fixed = Math.round(raw * 100) / 100;
-		return { attackSpeed: fixed };
+		return { attackSpeed: Number(raw.toFixed(1)) };
 	},
 	Helmet: () => {
 		const [min, max] = statRanges.armor;
 		const raw = Math.random() * (max - min) + min;
-		const fixed = Math.round(raw * 10) / 10;
-		return { armor: fixed };
+		return { armor: Number(raw.toFixed(1)) };
 	},
 	// Ring: () => {
 	// 	const [min, max] = statRanges.attackPower;
@@ -85,8 +81,8 @@ function rollRandomStat(itemTypes) {
 	if (!pool.length) return {};
 	const stat = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
 	const [min, max] = statRanges[stat] || [1, 1];
-	const val = Math.floor(Math.random() * (max - min + 1)) + min;
-	return { [stat]: val };
+	const raw = Math.random() * (max - min) + min;
+	return { [stat]: Number(raw.toFixed(1)) };
 }
 
 /**
@@ -159,27 +155,37 @@ export {
 class ItemService {
 	static generateRandomItem(level) {
 		try {
-			console.log('Generating random item for level:', level);
+			//console.log('Generating random item for level:', level);
 			const type = itemTypes[Math.floor(Math.random() * itemTypes.length)];
-			console.log('Selected item type:', type);
+			//console.log('Selected item type:', type);
 
 			let item;
 			switch (type) {
 				case 'weapon':
-					console.log('Generating weapon...');
+					//console.log('Generating weapon...');
 					item = this.generateWeapon(level);
 					break;
 				case 'armor':
-					console.log('Generating armor...');
+					//console.log('Generating armor...');
 					item = this.generateArmor(level);
 					break;
+				case 'gloves':
+					//console.log('Generating gloves...');
+					item = this.generateGloves(level);
+					break;
 				case 'amulet':
-					console.log('Generating amulet...');
+					//console.log('Generating amulet...');
 					item = this.generateAmulet(level);
 					break;
 			}
 
-			console.log('Generated item:', item);
+			// Capitalize the rarity in the item name
+			if (item) {
+				const rarity = item.rarity.charAt(0).toUpperCase() + item.rarity.slice(1);
+				item.name = item.name.replace(item.rarity, rarity);
+			}
+
+			//console.log('Generated item:', item);
 			return item;
 		} catch (error) {
 			console.error('Error in generateRandomItem:', error);
@@ -194,7 +200,7 @@ class ItemService {
 		return {
 			id: `weapon_${Date.now()}`,
 			type: 'weapon',
-			name: `${rarity} Weapon`,
+			name: `Weapon`,
 			level: level,
 			rarity: rarity,
 			stats: stats,
@@ -209,7 +215,7 @@ class ItemService {
 		return {
 			id: `armor_${Date.now()}`,
 			type: 'armor',
-			name: `${rarity} Armor`,
+			name: `Armor`,
 			level: level,
 			rarity: rarity,
 			stats: stats,
@@ -217,36 +223,51 @@ class ItemService {
 		};
 	}
 
+	static generateGloves(level) {
+		const rarity = this.determineRarity(level);
+		const stats = this.generateStats('gloves', rarity);
+
+		return {
+			id: `gloves_${Date.now()}`,
+			type: 'gloves',
+			name: `Gloves`,
+			level: level,
+			rarity: rarity,
+			stats: stats,
+			description: this.generateDescription('gloves', rarity, stats)
+		};
+	}
+
 	static generateAmulet(level) {
 		try {
-			console.log('Starting amulet generation...');
+			//console.log('Starting amulet generation...');
 			const rarity = this.determineRarity(level);
-			console.log('Determined rarity:', rarity);
+			//console.log('Determined rarity:', rarity);
 
-			console.log('Getting random spell...');
+			//console.log('Getting random spell...');
 			const spellKey = SpellService.getRandomSpell();
-			console.log('Got spell key:', spellKey);
+			//console.log('Got spell key:', spellKey);
 
-			console.log('Getting spell details...');
+			//console.log('Getting spell details...');
 			const spell = SpellService.getSpell(spellKey);
-			console.log('Got spell:', spell);
+			//console.log('Got spell:', spell);
 
 			const stats = {
 				spell: spellKey,
 				...this.generateStats('amulet', rarity)
 			};
-			console.log('Generated stats:', stats);
+			//console.log('Generated stats:', stats);
 
 			const item = {
 				id: `amulet_${Date.now()}`,
 				type: 'amulet',
-				name: `${rarity} Amulet of ${spell.name}`,
+				name: `Amulet of ${spell.name}`,
 				level: level,
 				rarity: rarity,
 				stats: stats,
 				description: `Grants the ability to cast ${spell.name}: ${spell.description}`
 			};
-			console.log('Created amulet item:', item);
+			//console.log('Created amulet item:', item);
 			return item;
 		} catch (error) {
 			console.error('Error in generateAmulet:', error);
@@ -309,6 +330,8 @@ class ItemService {
 				return ['damage', 'attackSpeed', 'attackPower'];
 			case 'armor':
 				return ['armor', 'health', 'vitality'];
+			case 'gloves':
+				return ['attackSpeed', 'attackPower'];
 			case 'amulet':
 				return ['castSpeed', 'mana', 'willpower'];
 			default:
@@ -319,7 +342,7 @@ class ItemService {
 	static rollStatValue(stat) {
 		const [min, max] = statRanges[stat];
 		const value = Math.random() * (max - min) + min;
-		return Math.round(value * 100) / 100; // Round to 2 decimal places
+		return Number(value.toFixed(1)); // Round to 1 decimal place
 	}
 
 	static determineRarity(level) {
@@ -350,8 +373,9 @@ class ItemService {
 		};
 
 		const levelBonus = level * 0.1;
-		const value = (baseValue + levelBonus) * rarityMultiplier[rarity];
-		return Math.min(value, maxValue);
+		const raw = (baseValue + levelBonus) * rarityMultiplier[rarity];
+		const value = Math.min(raw, maxValue);
+		return Number(value.toFixed(1));
 	}
 
 	static generateDescription(itemType, rarity, stats) {

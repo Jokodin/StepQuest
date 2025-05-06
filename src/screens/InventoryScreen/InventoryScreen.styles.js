@@ -21,8 +21,8 @@ export default StyleSheet.create({
 	},
 	tab: {
 		flex: 1,
-		paddingVertical: 12,
 		alignItems: 'center',
+		paddingVertical: 12,
 	},
 	tabActive: {
 		borderBottomWidth: 3,
@@ -36,10 +36,8 @@ export default StyleSheet.create({
 
 	// SectionList content padding
 	listContent: {
-		paddingVertical: 16,
+		padding: 16,
 	},
-
-	// Category header “pill” (matches store)
 	sectionHeaderContainer: {
 		backgroundColor: colors.surface,
 		alignSelf: 'stretch',
@@ -47,9 +45,10 @@ export default StyleSheet.create({
 		alignItems: 'center',
 		paddingVertical: 8,
 		paddingHorizontal: 16,
-		borderTopWidth: 1,
+		borderBottomWidth: 1,
 		borderColor: 'white',
 		marginTop: 24,
+		marginBottom: 16,
 		...Platform.select({
 			android: { elevation: 2 },
 			ios: {
@@ -66,25 +65,17 @@ export default StyleSheet.create({
 		color: colors.primary,
 		textTransform: 'uppercase',
 	},
-	sectionIcon: {
-		marginRight: 8,
-	},
-
-	// Each item becomes its own “card” that stretches full width
-	// itemContainerWrapper: {
-	// 	marginBottom: 8,
-	// },
-	itemContainer: {
+	gridRow: {
 		flexDirection: 'row',
-		alignItems: 'center',
 		justifyContent: 'space-between',
+		marginBottom: 12,
+	},
+	gridItem: {
+		width: '30%',
 		backgroundColor: colors.surface,
-		alignSelf: 'stretch',
-		marginTop: 12,
-		paddingVertical: 12,
-		paddingHorizontal: 16,
-		borderStartWidth: 1,
-		borderColor: 'white',
+		borderRadius: 8,
+		borderWidth: 2,
+		overflow: 'hidden',
 		...Platform.select({
 			android: { elevation: 1 },
 			ios: {
@@ -95,54 +86,55 @@ export default StyleSheet.create({
 			},
 		}),
 	},
-	itemContainerPressed: {
-		backgroundColor: 'rgba(0, 0, 0, 0.04)',
+	gridItemSingle: {
+		marginHorizontal: 0,
 	},
-
+	gridItemLeft: {
+		marginRight: 2,
+	},
+	gridItemMiddle: {
+		marginHorizontal: 2,
+	},
+	gridItemRight: {
+		marginLeft: 2,
+	},
+	gridItemContent: {
+		padding: 8,
+		paddingBottom: 4,
+	},
+	itemHeader: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		marginBottom: 4,
+	},
 	itemText: {
-		fontSize: 20,
+		fontSize: 16,
 		fontWeight: '500',
 		color: colors.text,
+		marginBottom: 4,
+	},
+	rarityText: {
+		fontSize: 12,
+		fontWeight: '600',
+		textTransform: 'capitalize',
 	},
 
-	// Expanded stats share the same card styling
+	// Stats container styling
 	statsContainer: {
-		alignSelf: 'stretch',
 		backgroundColor: colors.surface,
-		paddingHorizontal: 16,
-		borderStartWidth: 1,
-		borderColor: 'white',
+		padding: 8,
+		borderTopWidth: 1,
+		borderTopColor: colors.border,
 	},
 	statText: {
-		fontSize: 16,
-		color: 'white',
-		marginBottom: 4,
+		fontSize: 12,
+		color: colors.text,
+		marginBottom: 2,
 	},
 
 	equipButtonContainer: {
 		marginTop: 8,
-	},
-
-	// Equipped tab
-	equippedContainer: {
-		padding: 16,
-	},
-	slot: {
-		marginBottom: 12,
-	},
-	slotLabel: {
-		fontSize: 14,
-		color: colors.textSecondary,
-		marginBottom: 4,
-	},
-	slotItemContainer: {
-		padding: 12,
-		borderWidth: 1,
-		borderRadius: 8,
-	},
-	slotItemText: {
-		fontSize: 16,
-		color: colors.text,
 	},
 
 	// Banner
@@ -159,10 +151,5 @@ export default StyleSheet.create({
 		color: colors.surface,
 		fontWeight: '600',
 		fontSize: 14,
-	},
-
-	rarityText: {
-		fontSize: 14,
-		fontWeight: '600',
 	},
 });

@@ -2,6 +2,7 @@
 // Manages the player character: creation, storage, and retrieval.
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import SkillService from './SkillService';
 
 const STORAGE_KEY = 'currentCharacter';
 
@@ -37,17 +38,21 @@ class CharacterService {
 			id: Date.now().toString(),
 			createdAt: Date.now(),
 			name: 'Joko',
+			level: 1,
+			exp: 0,
+			expToNextLevel: 100,
 			stats: {
-				health: 100,
+				health: 10,
 				damage: 1,
 				attackPower: 1,
 				attackSpeed: 1,
-				strength: 1,
-				intelligence: 1,
-				dexterity: 1,
-				vitality: 1,
-				willpower: 1,
-				castSpeed: 0.2,
+				strength: 0,
+				intelligence: 0,
+				dexterity: 0,
+				vitality: 0,
+				willpower: 0,
+				castSpeed: 1,
+				mana: 10,
 			},
 			gear: [],            // list of equipped gear IDs
 		};
@@ -137,9 +142,9 @@ class CharacterService {
 	 * @returns {number} - Bonus attack power multiplier
 	 */
 	#calculateStrengthBonus() {
-		const totalStrength = this.getStat(this.currentCharacter, 'strength');
+		const totalStrength = this.currentCharacter.stats.strength || 0;
 		// Each point of strength adds 5% to attack power
-		return 1 + (totalStrength * 0.05);
+		return (totalStrength * 0.05);
 	}
 
 	/**
@@ -147,7 +152,7 @@ class CharacterService {
 	 * @returns {number} - Bonus cast chance percentage
 	 */
 	#calculateIntelligenceBonus() {
-		const totalIntelligence = this.getStat(this.currentCharacter, 'intelligence');
+		const totalIntelligence = this.currentCharacter.stats.intelligence || 0;
 		// Each point of intelligence adds 2% to cast chance
 		return totalIntelligence * 2;
 	}
@@ -157,9 +162,9 @@ class CharacterService {
 	 * @returns {number} - Bonus attack speed multiplier
 	 */
 	#calculateDexterityBonus() {
-		const totalDexterity = this.getStat(this.currentCharacter, 'dexterity');
+		const totalDexterity = this.currentCharacter.stats.dexterity || 0;
 		// Each point of dexterity adds 3% to attack speed
-		return 1 + (totalDexterity * 0.03);
+		return (totalDexterity * 0.03);
 	}
 
 	/**
@@ -167,9 +172,9 @@ class CharacterService {
 	 * @returns {number} - Bonus health multiplier
 	 */
 	#calculateVitalityBonus() {
-		const totalVitality = this.getStat('vitality');
+		const totalVitality = this.currentCharacter.stats.vitality || 0;
 		// Each point of vitality adds 10% to health
-		return 1 + (totalVitality * 0.10);
+		return (totalVitality * 0.10);
 	}
 
 	/**
@@ -177,54 +182,72 @@ class CharacterService {
 	 * @returns {number} - Bonus mana multiplier
 	 */
 	#calculateWillpowerBonus() {
-		const totalWillpower = this.getStat('willpower');
+		const totalWillpower = this.currentCharacter.stats.willpower || 0;
 		// Each point of willpower adds 15% to mana
-		return 1 + (totalWillpower * 0.15);
+		return (totalWillpower * 0.15);
 	}
 
 	/**
-	 * Get a character's final stat value including base stats, item bonuses, and attribute bonuses
+	 * Get a character's final stat value including base stats, item bonuses, attribute bonuses, and skill bonuses
 	 * @param {string} statName - Name of the stat to calculate
+	 * @param {Array<{type: string, attribute: string, value: number}>} skillBonuses - Array of skill bonuses to apply
 	 * @returns {number} - Final stat value
 	 */
-	getStat(statName) {
+	async getStat(statName, skillBonuses = []) {
 		const baseValue = this.currentCharacter.stats[statName] || 0;
 
+		// Load equipped items from AsyncStorage
+		let equippedItems = [];
+		try {
+			const equippedRaw = await AsyncStorage.getItem('equipped_items');
+			equippedItems = equippedRaw ? JSON.parse(equippedRaw) : [];
+		} catch (error) {
+			console.error('Error loading equipped items:', error);
+		}
+
 		// Sum stat from equipped items
-		const itemValue = this.currentCharacter.gear.reduce((sum, itemId) => {
-			const item = this.getItem(itemId);
+		const itemValue = equippedItems.reduce((sum, item) => {
 			return sum + (item?.stats?.[statName] || 0);
+		}, 0);
+
+		// Ensure skillBonuses is an array
+		const validSkillBonuses = Array.isArray(skillBonuses) ? skillBonuses : [];
+
+		// Sum stat from selected skills
+		const skillValue = validSkillBonuses.reduce((sum, skill) => {
+			if (skill && skill.type === 'attribute' && skill.attribute === statName) {
+				return sum + (skill.value || 0);
+			}
+			return sum;
 		}, 0);
 
 		// Apply attribute bonuses for specific stats
 		switch (statName) {
 			case 'attackPower':
-				return (baseValue + itemValue) * this.#calculateStrengthBonus();
+				return (baseValue + itemValue + skillValue) + this.#calculateStrengthBonus();
 
 			case 'attackSpeed':
-				return (baseValue + itemValue) * this.#calculateDexterityBonus();
+				return (baseValue + itemValue + skillValue) + this.#calculateDexterityBonus();
 
 			case 'castChance':
-				return baseValue + itemValue + this.#calculateIntelligenceBonus();
+				return baseValue + itemValue + skillValue + this.#calculateIntelligenceBonus();
 
 			case 'health':
-				return (baseValue + itemValue) * this.#calculateVitalityBonus();
+				return (baseValue + itemValue + skillValue) + this.#calculateVitalityBonus();
 
 			case 'mana':
-				return (baseValue + itemValue) * this.#calculateWillpowerBonus();
+				return (baseValue + itemValue + skillValue) + this.#calculateWillpowerBonus();
 
 			default:
-				return baseValue + itemValue;
+				return baseValue + itemValue + skillValue;
 		}
 	}
 
 	static async getCharacter(characterId) {
 		try {
-			const character = await AsyncStorage.getItem(`character_${characterId}`);
+			const character = await AsyncStorage.getItem(STORAGE_KEY);
 			if (!character) return null;
-
 			const parsedCharacter = JSON.parse(character);
-			// Ensure spells array exists
 			if (!parsedCharacter.spells) {
 				parsedCharacter.spells = [];
 			}
@@ -280,6 +303,35 @@ class CharacterService {
 			console.error('Error removing spell:', error);
 			return false;
 		}
+	}
+
+	/**
+	 * Add experience points to the character
+	 * @param {number} exp - Amount of experience to add
+	 * @returns {Promise<object>} - Updated character object
+	 */
+	async addExp(exp) {
+		const char = this.getCurrentCharacter();
+		char.exp += exp;
+
+		// Check for level up
+		while (char.exp >= char.expToNextLevel) {
+			char.exp -= char.expToNextLevel;
+			char.level += 1;
+			// Increase exp requirement for next level (exponential scaling)
+			char.expToNextLevel = Math.floor(100 * Math.pow(1.5, char.level - 1));
+
+			// Add a skill point when leveling up
+			await SkillService.addSkillPoint();
+		}
+
+		this.currentCharacter = char;
+		try {
+			await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(char));
+		} catch (e) {
+			console.error('Failed to save character after exp gain', e);
+		}
+		return char;
 	}
 }
 

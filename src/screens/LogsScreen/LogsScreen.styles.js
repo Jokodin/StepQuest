@@ -18,8 +18,22 @@ export default StyleSheet.create({
 	},
 	logRowContent: {
 		flexDirection: 'row',
-		justifyContent: 'space-between',
 		alignItems: 'center',
+		justifyContent: 'space-between',
+		padding: 4,
+	},
+	logRowTextContainer: {
+		flex: 1,
+		marginRight: 8,
+	},
+	monsterAndExpContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 8,
+	},
+	expText: {
+		color: colors.primary,
+		fontSize: 14,
 	},
 	emptyContainer: {
 		flex: 1,
@@ -44,6 +58,14 @@ export default StyleSheet.create({
 		fontSize: 18,
 		fontWeight: '600',
 		color: colors.text,
+		textAlign: 'center',
+	},
+	progressBarRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		width: '100%',
+		marginTop: 8,
 	},
 	progressBarContainer: {
 		width: '90%',
@@ -51,15 +73,21 @@ export default StyleSheet.create({
 		backgroundColor: colors.border,
 		borderRadius: 4,
 		overflow: 'hidden',
-		marginTop: 8,
 	},
 	progressBarFill: {
 		height: '100%',
 		backgroundColor: colors.primary,
 		borderRadius: 4,
 	},
+	progressText: {
+		marginTop: 4,
+		fontSize: 14,
+		color: colors.textSecondary,
+		textAlign: 'center',
+	},
 	resetNotice: {
 		padding: 8,
+		marginVertical: 8,
 		backgroundColor: colors.surface,
 		alignItems: 'center',
 	},
@@ -75,35 +103,6 @@ export default StyleSheet.create({
 		fontSize: 14,
 		textAlign: 'center',
 	},
-	progressBarRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		width: '90%',
-		marginTop: 8,
-	},
-	progressLabel: {
-		width: 24,
-		textAlign: 'center',
-		color: colors.textSecondary,
-	},
-	progressBarContainer: {
-		flex: 1,
-		height: 8,
-		backgroundColor: colors.textSecondary,    // lighter track
-		borderRadius: 4,
-		overflow: 'hidden',
-		marginHorizontal: 4,
-	},
-	progressBarFill: {
-		height: '100%',
-		backgroundColor: colors.primary,
-	},
-	progressText: {
-		marginTop: 4,
-		fontSize: 14,
-		color: colors.textSecondary,
-		textAlign: 'center',
-	},
 	testButton: {
 		backgroundColor: colors.primary,
 		padding: 12,
@@ -113,16 +112,6 @@ export default StyleSheet.create({
 	},
 	testButtonText: {
 		color: colors.background,
-		fontWeight: 'bold',
-	},
-	areaHeader: {
-		padding: 16,
-		backgroundColor: colors.backgroundSecondary,
-		borderBottomWidth: 1,
-		borderBottomColor: colors.border,
-	},
-	areaText: {
-		fontSize: 18,
 		fontWeight: 'bold',
 	},
 	progressBar: {
@@ -136,13 +125,9 @@ export default StyleSheet.create({
 		height: '100%',
 		backgroundColor: colors.primary,
 	},
-	list: {
-		padding: 16,
-	},
 	entry: {
 		backgroundColor: colors.backgroundSecondary,
 		borderRadius: 8,
-		padding: 16,
 		marginBottom: 12,
 	},
 	entryHeader: {

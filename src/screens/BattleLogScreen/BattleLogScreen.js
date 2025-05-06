@@ -11,7 +11,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import ThemedText from '@/components/ThemedText';
 import ScreenLayout from '@/components/ScreenLayout';
-import TownDefenseService from '@/services/TownDefenseService';
 import WalkRewardService from '@/services/WalkRewardService';
 import CharacterService from '@/services/CharacterService';
 import BattleService from '@/services/BattleService';
@@ -33,10 +32,7 @@ export default function BattleLogScreen({ route, navigation }) {
 	const heroName = currentChar.name || 'Player';
 
 	// Choose history based on logType
-	const history =
-		logType === 'walk'
-			? WalkRewardService.getHistory()
-			: TownDefenseService.getHistory();
+	const history = WalkRewardService.getHistory();
 	const entry = history[logIndex] || {};
 
 	const {
@@ -71,17 +67,17 @@ export default function BattleLogScreen({ route, navigation }) {
 	// Initialize replay when switching to replay tab
 	useEffect(() => {
 		if (activeTab === 'replay' && !replayState) {
-			console.log('Initializing replay from entry:', entry);
+			//console.log('Initializing replay from entry:', entry);
 			try {
 				const replay = battleService.createBattleReplay(entry);
 				if (!replay) {
 					console.error('Failed to create replay state');
 					return;
 				}
-				console.log('Setting replay state with frames:', replay.frames.length);
+				//console.log('Setting replay state with frames:', replay.frames.length);
 				setReplayState(replay);
 			} catch (error) {
-				console.error('Error creating replay:', error);
+				console.error('Error initializing battle replay:', error);
 			}
 		}
 	}, [activeTab, entry]);
@@ -172,7 +168,7 @@ export default function BattleLogScreen({ route, navigation }) {
 	// Update replay state
 	useEffect(() => {
 		if (activeTab === 'replay' && replayState) {
-			console.log('Starting replay animation with frames:', replayState.frames.length);
+			//console.log('Starting replay animation with frames:', replayState.frames.length);
 
 			// Don't start a new animation if one is already running or if the battle is complete
 			if (animationFrame.current || replayState.isComplete) {
@@ -180,7 +176,7 @@ export default function BattleLogScreen({ route, navigation }) {
 			}
 
 			const FRAMERATE = BattleService.FRAMERATE; // Use the FRAMERATE from battleService
-			console.log('FRAMERATE', FRAMERATE);
+			//console.log('FRAMERATE', FRAMERATE);
 			const FRAME_INTERVAL = 1000 / FRAMERATE; // Time between frames in milliseconds
 			let lastFrameTime = Date.now();
 
@@ -205,7 +201,7 @@ export default function BattleLogScreen({ route, navigation }) {
 							replayState.frames.length - 1
 						);
 
-						console.log(`Updating frame from ${replayState.currentFrameIndex} to ${nextFrameIndex}`);
+						//console.log(`Updating frame from ${replayState.currentFrameIndex} to ${nextFrameIndex}`);
 						const updatedReplay = {
 							...replayState,
 							currentFrameIndex: nextFrameIndex,
@@ -219,7 +215,7 @@ export default function BattleLogScreen({ route, navigation }) {
 						if (!updatedReplay.isComplete) {
 							animationFrame.current = requestAnimationFrame(updateReplay);
 						} else {
-							console.log('Replay completed');
+							//console.log('Replay completed');
 							// Clear the animation frame when complete
 							if (animationFrame.current) {
 								cancelAnimationFrame(animationFrame.current);
@@ -244,7 +240,7 @@ export default function BattleLogScreen({ route, navigation }) {
 			animationFrame.current = requestAnimationFrame(updateReplay);
 
 			return () => {
-				console.log('Cleaning up replay animation');
+				//console.log('Cleaning up replay animation');
 				if (animationFrame.current) {
 					cancelAnimationFrame(animationFrame.current);
 					animationFrame.current = null;
@@ -276,7 +272,7 @@ export default function BattleLogScreen({ route, navigation }) {
 			);
 		}
 
-		console.log('Rendering frame:', replayState.currentFrameIndex, currentFrame);
+		//console.log('Rendering frame:', replayState.currentFrameIndex, currentFrame);
 
 		return (
 			<View style={styles.replayContainer}>
@@ -349,17 +345,17 @@ export default function BattleLogScreen({ route, navigation }) {
 					<ThemedText style={styles.metaText}>Hero: {heroName}</ThemedText>
 					<ThemedText style={styles.metaText}>
 						Monsters: {Array.isArray(monsters) ? monsters.map(monster => {
-							// Find the first log entry with monster stats
-							const initialLog = logs.find(log => log.actor === 'System' && Array.isArray(log.monsterStats));
-							if (initialLog && initialLog.monsterStats) {
-								const monsterStats = initialLog.monsterStats.find(m => m.id === monster);
-								if (monsterStats) {
-									return `${monsterStats.id} (Level ${monsterStats.level}, HP: ${monsterStats.maxHp}, Max Damage: ${monsterStats.baseDamage})`;
-								}
+							if (typeof monster === 'string') {
+								return monster;
 							}
-							return monster;
+							return `${monster.id} (Level ${monster.level})`;
 						}).join(', ') : 'None'}
 					</ThemedText>
+					{success && (
+						<ThemedText style={styles.metaText}>
+							Experience Gained: {entry.isBoss ? 50 * entry.area : 10 * (entry.area - 1) * monsters.length + 10 * monsters.length} XP
+						</ThemedText>
+					)}
 				</View>
 
 				{/* Tabs */}

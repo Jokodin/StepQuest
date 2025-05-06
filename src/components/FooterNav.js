@@ -11,13 +11,12 @@ import { useNavigation, useRoute } from '@react-navigation/native';
 import { colors } from '@/constants/theme';
 
 const tabs = [
-	// { name: 'Town', icon: '🏘️' },
 	{ name: 'Character', icon: '👤' },
 	{ name: 'Items', icon: '🎒' },
-	// { name: 'Store', icon: '🛒' },
-	{ name: 'Battle Logs', icon: '⚔️' },
+	{ name: 'Walk Logs', icon: '⚔️' },
 	{ name: 'Boxes', icon: '📦' },
 	{ name: 'Quests', icon: '📜' },
+	{ name: 'Skills', icon: '💪' },
 ];
 
 export default function FooterNav() {

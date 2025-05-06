@@ -50,12 +50,20 @@ const QuestsScreen = () => {
 	const handleClaimReward = async (questType) => {
 		const quest = await QuestService.claimQuestReward(questType);
 		if (quest) {
-			// Update character stats
-			const character = await AsyncStorage.getItem('currentCharacter');
-			if (character) {
-				const charData = JSON.parse(character);
-				charData.stats[quest.attribute] += 1;
-				await AsyncStorage.setItem('currentCharacter', JSON.stringify(charData));
+			if (questType === 'hourly') {
+				// Add an item box for hourly quests
+				const rawBoxes = await AsyncStorage.getItem('walk_reward_boxes');
+				const boxes = rawBoxes ? JSON.parse(rawBoxes) : [];
+				boxes.push({ area: 1 }); // Use area 1 for quest rewards
+				await AsyncStorage.setItem('walk_reward_boxes', JSON.stringify(boxes));
+			} else {
+				// Daily quests still give attributes
+				const character = await AsyncStorage.getItem('currentCharacter');
+				if (character) {
+					const charData = JSON.parse(character);
+					charData.stats[quest.attribute] += 1;
+					await AsyncStorage.setItem('currentCharacter', JSON.stringify(charData));
+				}
 			}
 			loadQuests();
 		}
@@ -75,7 +83,9 @@ const QuestsScreen = () => {
 					<Text style={styles.timeLeft}>{timeLeftText}</Text>
 				</View>
 				<Text style={styles.questDescription}>
-					Walk {quest.stepGoal} steps to increase your {quest.attribute}
+					{type === 'Daily'
+						? `Walk ${quest.stepGoal} steps to increase your ${quest.attribute}`
+						: `Walk ${quest.stepGoal} steps to earn an item box`}
 				</Text>
 				<View style={styles.progressBar}>
 					<View

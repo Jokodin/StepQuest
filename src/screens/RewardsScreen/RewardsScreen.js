@@ -23,9 +23,9 @@ export default function RewardsScreen({ navigation }) {
 	const loadBoxes = async () => {
 		try {
 			const raw = await AsyncStorage.getItem('walk_reward_boxes');
-			console.log('Raw boxes data:', raw);
+			//console.log('Raw boxes data:', raw);
 			const parsedBoxes = raw ? JSON.parse(raw) : [];
-			console.log('Parsed boxes:', parsedBoxes);
+			//console.log('Parsed boxes:', parsedBoxes);
 			setBoxes(parsedBoxes);
 		} catch (e) {
 			console.error('Failed to load reward boxes', e);
@@ -42,41 +42,41 @@ export default function RewardsScreen({ navigation }) {
 	// Open next box: generates and shows item based on box area level
 	const openNext = async () => {
 		try {
-			console.log('Opening next box. Current boxes:', boxes);
+			//console.log('Opening next box. Current boxes:', boxes);
 			if (boxes.length === 0) {
-				console.log('No boxes available');
+				//console.log('No boxes available');
 				return;
 			}
 			const box = boxes[0];
-			console.log('Opening box:', box);
+			//console.log('Opening box:', box);
 			const level = typeof box.area === 'number' ? box.area : 1;
-			console.log('Using level:', level);
+			//console.log('Using level:', level);
 
 			// Generate item using ItemService
-			console.log('Generating item...');
+			//console.log('Generating item...');
 			const item = ItemService.generateRandomItem(level);
-			console.log('Generated item:', item);
+			//console.log('Generated item:', item);
 
 			// Persist to inventory
-			console.log('Saving to inventory...');
+			//console.log('Saving to inventory...');
 			const invRaw = await AsyncStorage.getItem('inventory');
-			console.log('Current inventory:', invRaw);
+			//console.log('Current inventory:', invRaw);
 			const inv = invRaw ? JSON.parse(invRaw) : [];
 			inv.push(item);
 			await AsyncStorage.setItem('inventory', JSON.stringify(inv));
-			console.log('Updated inventory:', inv);
+			//console.log('Updated inventory:', inv);
 
 			// Remove opened box
-			console.log('Removing box...');
+			//console.log('Removing box...');
 			const newBoxes = boxes.slice(1);
 			await AsyncStorage.setItem('walk_reward_boxes', JSON.stringify(newBoxes));
-			console.log('Updated boxes:', newBoxes);
+			//console.log('Updated boxes:', newBoxes);
 			setBoxes(newBoxes);
 
 			// Display reward
-			console.log('Setting reward item...');
+			//console.log('Setting reward item...');
 			setRewardItem(item);
-			console.log('Done!');
+			//console.log('Done!');
 		} catch (error) {
 			console.error('Error in openNext:', error);
 		}

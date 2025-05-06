@@ -4,19 +4,41 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
 	View,
 	Text,
-	SectionList,
+	FlatList,
 	TouchableOpacity,
 	SafeAreaView,
-	Button,
+	Alert,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useIsFocused } from '@react-navigation/native';
+import MaterialIcons from 'react-native-vector-icons/MaterialIcons';
 import styles from './InventoryScreen.styles';
 import { colors } from '@/constants/theme';
 import ScreenLayout from '@/components/ScreenLayout';
 import Item from '@/models/Item';
 import { itemTypes } from '@/services/ItemService';
 import CharacterService from '@/services/CharacterService';
+
+// Map item types to their corresponding icons
+const itemIcons = {
+	weapon: 'restaurant',
+	armor: 'restaurant',
+	gloves: 'restaurant',
+	amulet: 'restaurant',
+};
+
+// Map stat names to their display aliases
+const statAliases = {
+	damage: 'DMG',
+	health: 'HP',
+	armor: 'ARM',
+	attackSpeed: 'ASPD',
+	attackPower: 'ATK',
+	vitality: 'VIT',
+	castSpeed: 'CSPD',
+	mana: 'MP',
+	willpower: 'WIL',
+};
 
 export default function InventoryScreen() {
 	const isFocused = useIsFocused();
@@ -84,15 +106,43 @@ export default function InventoryScreen() {
 		setExpanded(prev => ({ ...prev, [itemId]: !prev[itemId] }));
 	};
 
+	// Show equip/unequip dialog
+	const showEquipDialog = item => {
+		const action = tab === 'Inventory' ? 'Equip' : 'Unequip';
+		Alert.alert(
+			`${action} Item`,
+			`Do you want to ${action.toLowerCase()} ${item.name}?`,
+			[
+				{
+					text: 'Cancel',
+					style: 'cancel',
+				},
+				{
+					text: action,
+					onPress: () => tab === 'Inventory' ? handleEquip(item) : handleUnequip(item),
+				},
+			]
+		);
+	};
+
 	// Sections for Inventory tab: items not equipped
 	const inventorySections = itemTypes.map(cat => ({
 		title: cat,
 		data: inventory
 			.filter(it => it && it.type === cat && !equippedItems.some(eq => eq && eq.id === it.id))
 			.sort((a, b) => {
-				// sort by rarity then quality
-				const r = a.rarity.localeCompare(b.rarity);
-				return r !== 0 ? r : b.quality - a.quality;
+				// Define rarity order (highest to lowest)
+				const rarityOrder = {
+					'legendary': 4,
+					'epic': 3,
+					'rare': 2,
+					'uncommon': 1,
+					'common': 0
+				};
+				// Sort by rarity first (descending)
+				const rarityDiff = rarityOrder[b.rarity] - rarityOrder[a.rarity];
+				// If same rarity, sort by quality (descending)
+				return rarityDiff !== 0 ? rarityDiff : b.quality - a.quality;
 			}),
 	}));
 
@@ -102,60 +152,84 @@ export default function InventoryScreen() {
 		data: equippedItems.filter(eq => eq && eq.type === cat),
 	}));
 
-	// Render an inventory item row
-	const renderInventoryItem = ({ item }) => {
-		if (!item) return null;
-		const isOpen = expanded[item.id];
+	// Flatten sections for FlatList
+	const getInventoryData = () => {
+		const sections = tab === 'Inventory' ? inventorySections : equippedSections;
+		return sections.reduce((acc, section) => {
+			if (section.data.length > 0) {
+				// Add header
+				acc.push({ type: 'header', title: section.title });
+				// Group items into triplets for grid layout
+				for (let i = 0; i < section.data.length; i += 3) {
+					acc.push({
+						type: 'row',
+						items: section.data.slice(i, i + 3)
+					});
+				}
+			}
+			return acc;
+		}, []);
+	};
+
+	// Render section header
+	const renderSectionHeader = ({ item }) => {
+		if (!item || item.type !== 'header') return null;
 		return (
-			<View style={styles.itemContainerWrapper}>
-				<TouchableOpacity
-					style={styles.itemContainer}
-					onPress={() => toggleExpand(item.id)}
-				>
-					<Text style={styles.itemText}>{item.name}</Text>
-				</TouchableOpacity>
-				{isOpen && (
-					<View style={styles.statsContainer}>
-						{Object.entries(item.stats || {}).map(([stat, val]) => (
-							<Text key={stat} style={styles.statText}>
-								{stat}: {val}
-							</Text>
-						))}
-						<View style={styles.equipButtonContainer}>
-							<Button title="Equip" onPress={() => handleEquip(item)} />
-						</View>
-					</View>
-				)}
+			<View style={styles.sectionHeaderContainer}>
+				<Text style={styles.sectionHeader}>{item.title}</Text>
 			</View>
 		);
 	};
 
-	// Render an equipped item row
-	const renderEquippedItem = ({ item }) => {
-		if (!item) return null;
-		const isOpen = expanded[item.id];
+	// Render a grid row (1-3 items)
+	const renderGridRow = ({ item }) => {
+		if (!item || item.type !== 'row') return null;
 		return (
-			<View style={styles.itemContainerWrapper}>
-				<TouchableOpacity
-					style={styles.itemContainer}
-					onPress={() => toggleExpand(item.id)}
-				>
-					<Text style={styles.itemText}>{item.name}</Text>
-				</TouchableOpacity>
-				{isOpen && (
-					<View style={styles.statsContainer}>
-						{Object.entries(item.stats || {}).map(([stat, val]) => (
-							<Text key={stat} style={styles.statText}>
-								{stat}: {val}
-							</Text>
-						))}
-						<View style={styles.equipButtonContainer}>
-							<Button title="Unequip" onPress={() => handleUnequip(item)} />
+			<View style={styles.gridRow}>
+				{item.items.map((gridItem, index) => (
+					<TouchableOpacity
+						key={gridItem.id}
+						style={[
+							styles.gridItem,
+							{ borderColor: colors[gridItem.rarity] },
+							index === 0 && styles.gridItemLeft,
+							index === 1 && styles.gridItemMiddle,
+							index === 2 && styles.gridItemRight
+						]}
+						onPress={() => showEquipDialog(gridItem)}
+					>
+						<View style={styles.gridItemContent}>
+							<View style={styles.itemHeader}>
+								<MaterialIcons
+									name={itemIcons[gridItem.type]}
+									size={24}
+									color={colors[gridItem.rarity]}
+								/>
+								<Text style={[styles.rarityText, { color: colors[gridItem.rarity] }]}>
+									{gridItem.rarity}
+								</Text>
+							</View>
 						</View>
-					</View>
-				)}
+						<View style={styles.statsContainer}>
+							{Object.entries(gridItem.stats || {}).map(([stat, val]) => (
+								<Text key={stat} style={styles.statText}>
+									{statAliases[stat] || stat}: {val}
+								</Text>
+							))}
+						</View>
+					</TouchableOpacity>
+				))}
 			</View>
 		);
+	};
+
+	// Custom renderer to handle both headers and grid rows
+	const renderItem = ({ item }) => {
+		if (!item) return null;
+		if (item.type === 'header') {
+			return renderSectionHeader({ item });
+		}
+		return renderGridRow({ item });
 	};
 
 	return (
@@ -175,37 +249,13 @@ export default function InventoryScreen() {
 				</View>
 
 				{/* Content */}
-				{tab === 'Inventory' ? (
-					<SectionList
-						sections={inventorySections}
-						extraData={expanded}
-						keyExtractor={item => item.id}
-						renderSectionHeader={({ section: { title, data } }) =>
-							data.length > 0 && (
-								<View style={styles.sectionHeaderContainer}>
-									<Text style={styles.sectionHeader}>{title}</Text>
-								</View>
-							)
-						}
-						renderItem={renderInventoryItem}
-						contentContainerStyle={styles.listContent}
-					/>
-				) : (
-					<SectionList
-						sections={equippedSections}
-						extraData={expanded}
-						keyExtractor={item => item.id}
-						renderSectionHeader={({ section: { title, data } }) =>
-							data.length > 0 && (
-								<View style={styles.sectionHeaderContainer}>
-									<Text style={styles.sectionHeader}>{title}</Text>
-								</View>
-							)
-						}
-						renderItem={renderEquippedItem}
-						contentContainerStyle={styles.listContent}
-					/>
-				)}
+				<FlatList
+					data={getInventoryData()}
+					extraData={[expanded, tab]}
+					keyExtractor={(item) => item.type === 'header' ? item.title : `row-${item.items[0].id}`}
+					renderItem={renderItem}
+					contentContainerStyle={styles.listContent}
+				/>
 
 				{/* Banner */}
 				{banner ? (
