@@ -1,4 +1,11 @@
 {
   "name": "StepQuest",
-  "displayName": "StepQuest"
+  "displayName": "StepQuest",
+  "android": {
+    "package": "com.anonymous.stepquest"
+  },
+  "plugins": [
+    "expo-asset",
+    "expo-font"
+  ]
 }
